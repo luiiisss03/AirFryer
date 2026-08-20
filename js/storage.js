@@ -1,5 +1,5 @@
 /* ============================================================
-   AirFryer · Capa de persistencia (localStorage)
+   AirChef · Capa de persistencia (localStorage)
    ------------------------------------------------------------
    Único punto de acceso al almacenamiento del navegador.
    Toda lectura/escritura pasa por aquí para evitar duplicar
@@ -255,6 +255,11 @@ const Store = (() => {
         localStorage.setItem(PREFIX + 'updatedAt', String(Date.now()));
       } catch (e) {
         console.warn('No se ha podido guardar en', key, e);
+        /* Antes esto solo se veía en la consola: el usuario creía haber
+           guardado y no era cierto. Ahora la interfaz puede avisar. */
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('airfryer:storagefull', { detail: { key } }));
+        }
       }
     } else {
       memory[key] = value;
@@ -611,7 +616,7 @@ const Store = (() => {
       if (!nombres.length) {
         return descartados.length
           ? { ok: false, error: 'Los datos están dañados y no se han podido recuperar.' }
-          : { ok: false, error: 'El archivo no contiene datos de AirFryer.' };
+          : { ok: false, error: 'El archivo no contiene datos de AirChef.' };
       }
 
       cache.clear();
@@ -630,7 +635,128 @@ const Store = (() => {
     }
   }
 
+  /* ─────────────── Fusión entre dispositivos ───────────────
+     Subir reemplazando el documento entero hacía que el último aparato en
+     escribir borrase el trabajo del otro. Aquí se comparan tres versiones:
+
+       base    lo último que este dispositivo sincronizó
+       local   lo que hay aquí ahora
+       remoto  lo que hay en la nube en este momento
+
+     Del lado local solo se aplican sus CAMBIOS respecto a la base (lo que
+     ha añadido y lo que ha borrado), sobre lo que haya en la nube. Así los
+     cambios de los dos dispositivos conviven. */
+
+  /** Lista de valores simples: se respetan altas y bajas de cada lado. */
+  function fusionarLista(base, local, remoto) {
+    const b = new Set(base || []), l = new Set(local || []);
+    const anadidos = [...l].filter(x => !b.has(x));
+    const borrados = [...b].filter(x => !l.has(x));
+    const out = (remoto || []).filter(x => !borrados.includes(x));
+    anadidos.forEach(x => { if (!out.includes(x)) out.unshift(x); });
+    return out;
+  }
+
+  /** Mapa clave → valor: gana el lado que lo haya tocado desde la base. */
+  function fusionarMapa(base, local, remoto) {
+    base = base || {}; local = local || {};
+    const out = Object.assign({}, remoto || {});
+    new Set([...Object.keys(base), ...Object.keys(local)]).forEach(k => {
+      if (JSON.stringify(base[k]) === JSON.stringify(local[k])) return;  // aquí no se tocó
+      if (local[k] === undefined) delete out[k];                          // borrado aquí
+      else out[k] = local[k];                                             // cambiado aquí
+    });
+    return out;
+  }
+
+  /** El historial solo crece: se unen las dos listas sin repetir. */
+  function fusionarHistorial(local, remoto) {
+    const vistos = new Set();
+    return [...(local || []), ...(remoto || [])]
+      .filter(e => {
+        const k = e.id + '|' + e.at;
+        if (vistos.has(k)) return false;
+        vistos.add(k);
+        return true;
+      })
+      .sort((a, b) => b.at - a.at)
+      .slice(0, 200);
+  }
+
+  /** Une productos repetidos que vengan de los dos lados con distinto id. */
+  function consolidarCompra(lista) {
+    const porNombre = new Map();
+    lista.forEach(item => {
+      const k = norm(item.name);
+      const ya = porNombre.get(k);
+      if (!ya) { porNombre.set(k, item); return; }
+      (item.parts || []).forEach(p => {
+        const igual = (ya.parts || []).find(x => x.u === p.u);
+        if (igual) igual.a += p.a; else (ya.parts = ya.parts || []).push({ a: p.a, u: p.u });
+      });
+      (item.texts || []).forEach(t => { if (!ya.texts.includes(t)) ya.texts.push(t); });
+      (item.from || []).forEach(f => { if (!ya.from.includes(f)) ya.from.push(f); });
+      ya.done = ya.done && item.done;      // si en un sitio falta por comprar, falta
+    });
+    return [...porNombre.values()];
+  }
+
+  /** Lista de objetos con id propio (la compra). */
+  function fusionarCompra(base, local, remoto) {
+    const porId = (arr) => new Map((arr || []).map(i => [i.id, i]));
+    const b = porId(base), l = porId(local);
+    const out = porId(remoto);
+    new Set([...b.keys(), ...l.keys()]).forEach(id => {
+      if (JSON.stringify(b.get(id)) === JSON.stringify(l.get(id))) return;
+      if (!l.has(id)) out.delete(id);
+      else out.set(id, l.get(id));
+    });
+    return consolidarCompra([...out.values()]);
+  }
+
+  /**
+   * Fusiona los tres documentos completos. Recibe y devuelve el objeto
+   * `data` (el interior de lo que produce exportAll).
+   */
+  function merge3(base, local, remoto) {
+    base = base || {}; local = local || {}; remoto = remoto || {};
+    return {
+      favorites: fusionarLista(base.favorites, local.favorites, remoto.favorites),
+      pantry: fusionarLista(base.pantry, local.pantry, remoto.pantry),
+      achievements: fusionarLista(base.achievements, local.achievements, remoto.achievements),
+      history: fusionarHistorial(local.history, remoto.history),
+      shopping: fusionarCompra(base.shopping, local.shopping, remoto.shopping),
+      week: fusionarMapa(base.week, local.week, remoto.week),
+      notes: fusionarMapa(base.notes, local.notes, remoto.notes),
+      checks: fusionarMapa(base.checks, local.checks, remoto.checks),
+      /* Las preferencias son de este aparato: manda lo local salvo lo que
+         aquí no se haya tocado nunca. */
+      prefs: fusionarMapa(base.prefs, local.prefs, remoto.prefs)
+    };
+  }
+
+  /* Copia de la última versión sincronizada, para poder comparar */
+  const BASE = PREFIX + 'syncBase';
+  const syncBase = {
+    get() {
+      try {
+        const raw = available ? localStorage.getItem(BASE) : memory[BASE];
+        return raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : null;
+      } catch (e) { return null; }
+    },
+    set(datos) {
+      try {
+        const txt = JSON.stringify(datos);
+        if (available) localStorage.setItem(BASE, txt); else memory[BASE] = txt;
+      } catch (e) { /* si no cabe, se seguirá reemplazando como antes */ }
+    },
+    clear() {
+      try { if (available) localStorage.removeItem(BASE); delete memory[BASE]; } catch (e) {}
+    }
+  };
+
   function wipe() {
+    syncBase.clear();
     Object.values(KEYS).forEach(k => {
       if (available) localStorage.removeItem(k);
       delete memory[k];
@@ -690,6 +816,7 @@ const Store = (() => {
   return {
     favorites, history, week, shopping, pantry, notes, prefs, achievements, checks,
     SLOTS, exportAll, importAll, wipe, wipeUserData, lastUser, todayKey, lastModified, hasData,
+    merge3, syncBase,
     isAvailable: () => available
   };
 })();

@@ -153,7 +153,14 @@ img { max-width: 100%; }
   color: #fff; transition: opacity .45s var(--ease), visibility .45s;
 }
 .splash.is-out { opacity: 0; visibility: hidden; }
-.splash__logo { font-size: 4.5rem; animation: bob 1.4s ease-in-out infinite; }
+.splash__logo {
+  width: 120px; height: 120px; display: block;
+  animation: bob 1.4s ease-in-out infinite;
+  /* El logotipo lleva fondo claro propio: sobre el naranja del splash se
+     recorta en un círculo para que no se vea un cuadrado pegado. */
+  background: var(--bg); border-radius: 50%; padding: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.18);
+}
 .splash__name { font-size: 1.5rem; font-weight: 800; letter-spacing: .04em; }
 .splash__bar { width: 140px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.35); overflow: hidden; }
 .splash__bar span { display: block; height: 100%; width: 40%; background: #fff; border-radius: 4px; animation: load 1s ease-in-out infinite; }
@@ -174,9 +181,8 @@ img { max-width: 100%; }
 
 .brand { display: flex; align-items: center; gap: 9px; font-size: 1.15rem; font-weight: 800; }
 .brand__icon {
-  width: 38px; height: 38px; display: grid; place-items: center;
-  background: linear-gradient(140deg, #FF9C5B, #FF5C1F);
-  border-radius: 12px; font-size: 1.15rem; box-shadow: var(--shadow-sm);
+  width: 38px; height: 38px; display: block; object-fit: contain;
+  border-radius: 10px;
 }
 .brand__text b { color: var(--orange); }
 
@@ -512,6 +518,9 @@ img { max-width: 100%; }
   position: fixed; inset: 0; z-index: 100;
   display: flex; align-items: flex-end; justify-content: center;
 }
+/* El formulario de la cuenta, cuando se abre desde la pantalla de entrada,
+   tiene que quedar por encima de ella (la bienvenida está en 120). */
+.sheet--sobre-bienvenida { z-index: 125; }
 .sheet__backdrop {
   position: absolute; inset: 0; background: rgba(24, 14, 8, .55);
   backdrop-filter: blur(4px); opacity: 0; transition: opacity .3s var(--ease);
@@ -684,6 +693,7 @@ img { max-width: 100%; }
   max-width: 620px; margin: 0 auto; width: 100%;
   display: flex; flex-direction: column; align-items: center; text-align: center;
 }
+.cook__texto { display: flex; flex-direction: column; align-items: center; width: 100%; }
 .cook__count {
   font-size: .8rem; font-weight: 800; letter-spacing: .14em;
   color: var(--orange); margin-bottom: 14px;
@@ -737,6 +747,33 @@ img { max-width: 100%; }
 }
 .cook__foot .btn { flex: 1; padding: 15px; }
 
+/* Móvil en horizontal: apoyar el teléfono de lado en la encimera es de lo más
+   natural al cocinar, y así el temporizador quedaba fuera de la pantalla y
+   sobraba todo el ancho. En dos columnas cabe todo sin desplazarse. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .cook__body {
+    flex-direction: row; align-items: center; justify-content: center;
+    gap: 26px; max-width: none; padding: 14px 20px; text-align: left;
+  }
+  .cook__texto { flex: 1 1 46%; min-width: 0; align-items: flex-start; width: auto; }
+  .cook__count { margin-bottom: 6px; }
+  .cook__step { margin-bottom: 0; max-width: none; font-size: clamp(1rem, 2.6vw, 1.25rem); }
+  .timer { flex: 0 0 auto; max-width: 250px; gap: 8px; }
+  .timer__ring { width: 104px; height: 104px; }
+  .timer__display { font-size: 1.35rem; }
+  .timer__inner small { font-size: .62rem; }
+  .timer__set { display: none; }          /* los ± y el campo de minutos sobran aquí */
+  .timer .btn--block { padding: 10px; font-size: .82rem; }
+  .timer__quick { gap: 6px; }
+  .timer__quick button { padding: 7px 9px; font-size: .72rem; min-height: 0; }
+  /* No cabe en una fila y es el menos necesario mientras se cocina: al acabar,
+     el botón grande ya se convierte en «Reiniciar». */
+  .timer__quick [data-timer-reset] { display: none; }
+  .cook__foot { padding: 10px 20px calc(10px + env(safe-area-inset-bottom)); }
+  .cook__foot .btn { padding: 11px; }
+  .cook__head { padding-top: 6px; padding-bottom: 6px; }
+}
+
 /* ══════════════ 8. SEMANA / COMPRA / PERFIL ══════════════ */
 .row-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
 
@@ -789,6 +826,12 @@ img { max-width: 100%; }
   color: var(--muted); margin: 22px 0 10px;
 }
 .shop-head--muted { opacity: .7; }
+
+/* Un nombre largo sin espacios (o llegado por sincronización) empujaba la
+   página entera y provocaba desplazamiento lateral en toda la aplicación. */
+.shop-item, .ing { min-width: 0; }
+.ing__text, .shop-item__qty, .shop-item__from { overflow-wrap: anywhere; min-width: 0; }
+.card__title, .card__desc, .me__name, .rcp__title { overflow-wrap: anywhere; }
 .shop-list { display: flex; flex-direction: column; gap: 8px; }
 .shop-item {
   display: flex; align-items: center; gap: 8px;
@@ -811,9 +854,25 @@ img { max-width: 100%; }
 .stat {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
   padding: 18px 16px; display: flex; flex-direction: column; gap: 2px;
-  transition: transform .2s var(--ease), box-shadow .2s;
+  transition: transform .2s var(--ease), box-shadow .2s, border-color .2s;
+  text-align: left; width: 100%; position: relative;
 }
-.stat:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+.stat:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: var(--orange); }
+/* La pista de "a dónde lleva" solo aparece al pasar por encima, para no
+   recargar la cuadrícula de datos. En táctil se muestra siempre. */
+.stat__ir {
+  font-style: normal; font-size: .72rem; font-weight: 700; color: var(--orange);
+  margin-top: 6px; opacity: 0; transition: opacity .2s;
+}
+.stat:hover .stat__ir, .stat:focus-visible .stat__ir { opacity: 1; }
+@media (hover: none) { .stat__ir { opacity: .75; } }
+
+/* Resalte breve al saltar a una sección desde los datos del perfil */
+.is-destacada { animation: destacar 1.4s var(--ease); }
+@keyframes destacar {
+  0%, 100% { background: transparent; }
+  20%, 60% { background: var(--orange-soft); }
+}
 .stat b { font-size: 1.5rem; }
 .stat span { font-size: 1.7rem; font-weight: 800; letter-spacing: -.03em; color: var(--orange); }
 .stat small { color: var(--muted); font-size: .78rem; }
@@ -1317,6 +1376,23 @@ img { max-width: 100%; }
 .credits a { font-size: .74rem; color: var(--orange); text-decoration: none; }
 .credits a:hover { text-decoration: underline; }
 
+/* ══════════════ 12·0. AVISO DE VERSIÓN NUEVA ══════════════
+   Aparece abajo, por encima de la barra de pestañas del móvil. */
+.update-bar {
+  position: fixed; z-index: 130;
+  left: 50%; transform: translateX(-50%) translateY(140%);
+  bottom: calc(var(--tabbar-h) + 14px + env(safe-area-inset-bottom));
+  width: min(520px, calc(100% - 24px));
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border-radius: var(--r-lg);
+  background: var(--surface); border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg); font-size: .88rem; font-weight: 600;
+  transition: transform .35s var(--ease);
+}
+.update-bar.is-in { transform: translateX(-50%) translateY(0); }
+.update-bar span { flex: 1; min-width: 0; }
+@media (min-width: 900px) { .update-bar { bottom: 18px; } }
+
 /* ══════════════ 12a. PANTALLA DE RESCATE ══════════════
    Solo aparece si el arranque falla. Usa los mismos tokens que el resto. */
 .rescue {
@@ -1356,7 +1432,7 @@ img { max-width: 100%; }
 .welcome.is-in .welcome__panel { transform: none; }
 
 .welcome__logo {
-  font-size: 3.4rem; margin-bottom: 10px;
+  width: 96px; height: 96px; display: block; margin: 0 auto 10px;
   animation: flota 3s ease-in-out infinite;
 }
 @keyframes flota { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
@@ -1468,9 +1544,8 @@ img { max-width: 100%; }
 /* Modal de la cuenta */
 .auth__hero { text-align: center; margin-bottom: 20px; }
 .auth__emoji {
-  display: inline-grid; place-items: center;
-  width: 68px; height: 68px; border-radius: 22px; font-size: 2.1rem;
-  background: linear-gradient(140deg, #FF9C5B, #FF5C1F);
+  display: block; margin-inline: auto; object-fit: contain;
+  width: 68px; height: 68px; border-radius: 18px;
   box-shadow: 0 10px 24px rgba(255,92,31,.32); margin-bottom: 12px;
 }
 .auth__intro { color: var(--muted); font-size: .9rem; line-height: 1.55; }

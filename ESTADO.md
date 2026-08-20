@@ -1,4 +1,4 @@
-# Estado del proyecto AirFryer
+# Estado del proyecto AirChef
 
 > Documento de continuidad. Si retomas el proyecto (tú o una sesión nueva de
 > Claude), empieza leyendo esto y luego el `README.md`.
@@ -174,6 +174,158 @@ Once errores de prioridad 1. Detalles que conviene no deshacer:
 
 ---
 
+## 🔀 Fase 2: sincronización que no pierde datos
+
+**Antes**: subir reemplazaba el documento entero, así que el último dispositivo
+en escribir borraba el trabajo del otro. Sin aviso.
+
+**Ahora** se comparan tres versiones y solo se aplican los *cambios* locales:
+
+| | |
+|---|---|
+| `base` | lo último que este aparato sincronizó (`airfryer:syncBase`) |
+| `local` | lo que hay aquí ahora |
+| `remoto` | lo que hay en la nube en este instante |
+
+`Store.merge3(base, local, remoto)` fusiona colección por colección: listas por
+altas y bajas, mapas por clave (gana quien la tocó), historial por unión sin
+repetir, y la compra por id de producto más una consolidación por nombre (el
+mismo producto añadido en dos sitios se suma en vez de duplicarse).
+
+`Cloud.subir()` lee el sello `updated_at` antes de escribir: si no es el que
+dejamos nosotros, ha escrito otro dispositivo y fusiona. `subir({forzar:true})`
+salta la fusión, y se usa solo cuando el usuario pide expresamente reemplazar
+(resolver un conflicto o borrar también la cuenta).
+
+**Importante**: el disparador `airfryer_touch()` de la tabla reescribe
+`updated_at`, así que tras el `upsert` hay que leer el valor real con
+`.select('updated_at')`. Si se guardase el sello enviado en vez del real, la
+detección de cambios ajenos dejaría de funcionar.
+
+### Resto de la fase 2
+
+- **Ajuste de temperatura en el texto** (`adjTempTexto`): la ficha decía 210 °C
+  y el paso 200 °C. Se aplica en ficha, modo cocinar, voz, consejos y al
+  compartir. Solo toca los grados, nunca los minutos.
+- **Aviso de versión nueva**: `sw.js` ya **no** llama a `skipWaiting()` en la
+  instalación (mezclaba HTML viejo con scripts nuevos). La versión nueva espera,
+  la aplicación muestra una barra «Hay una versión nueva», y al aceptar se manda
+  `SKIP_WAITING` y se recarga con `controllerchange`. No aparece durante el modo
+  cocinar.
+- **Subida pendiente**: un cambio llegado mientras se subía se recordaba y se
+  perdía hasta el siguiente. Ahora se reintenta al terminar.
+- **Guardar al salir**: se usa `visibilitychange` (la página aún está viva)
+  además de `pagehide`, donde muchas veces ya no daba tiempo.
+- **Almacenamiento lleno**: `write()` lanza `airfryer:storagefull` y la interfaz
+  avisa una sola vez. Antes solo se veía en la consola.
+- **Textos largos**: `overflow-wrap: anywhere` en compra, tarjetas y perfil. Un
+  nombre de 200 caracteres sin espacios desplazaba la página entera.
+- **Móvil en horizontal**: el modo cocinar pasa a dos columnas por debajo de
+  500 px de alto. Antes el temporizador quedaba fuera de la pantalla.
+
+---
+
+## 🏷️ Nombre y logotipo
+
+La aplicación se llama **AirChef** (antes AirFryer). Al renombrar hay dos cosas
+que **no** se tocaron a propósito:
+
+- Las claves de `localStorage` siguen con el prefijo `airfryer:` y la tabla de
+  Supabase sigue siendo `airfryer_data`. Cambiarlas dejaría sin datos a quien ya
+  tenga la aplicación instalada. Lo mismo con los eventos internos
+  (`airfryer:datachange`).
+- La dirección pública sigue siendo `https://luiiisss03.github.io/AirFryer/`
+  porque el repositorio se llama así. Si algún día se renombra el repositorio,
+  hay que cambiar `SUPABASE_CONFIG.siteUrl` **y** las URL de Supabase.
+
+Ojo con los reemplazos automáticos: la marca de la cabecera va partida en dos
+etiquetas (`Air<b>Chef</b>`) y un buscar/reemplazar de «AirFryer» no la alcanza.
+Y «air fryer» en minúsculas es el electrodoméstico, no la marca: no se toca.
+
+### El logotipo
+
+`img/logo.svg` es la única fuente: una freidora con gorro de chef y dos arcos de
+aire caliente. Se usa en el favicon, el splash, la cabecera, la pantalla de
+entrada y el modal de la cuenta.
+
+Los iconos de la PWA se generan con `tools/generar-iconos.py` (necesita Pillow),
+que **redibuja** el mismo diseño y produce los cuatro PNG de `icons/`:
+
+```bash
+python tools/generar-iconos.py
+```
+
+El `icon-maskable` lleva el dibujo más pequeño (58 % del lienzo) porque Android
+puede recortarlo en círculo.
+
+**Si algún día se quiere usar un logotipo distinto**: basta con sustituir
+`img/logo.svg` y volver a lanzar el script; si el nuevo es un PNG, hay que
+cambiar las cinco referencias de `index.html` y regenerar los iconos a mano.
+
+---
+
+## 🚪 Entrada a la aplicación
+
+Al abrir se comprueba **primero** si hay sesión, y se decide sin esperar a la
+red (`hayIndicioDeSesion()` busca la clave `sb-…auth-token` de Supabase en
+localStorage):
+
+- **Con sesión** → directo al inicio. La pantalla de entrada no aparece ni un
+  instante.
+- **Sin sesión** → pantalla de entrada. Si ya había usado la aplicación, el
+  texto cambia a «Entra en AirChef» y el botón principal pasa a ser *Entrar*.
+- **Rastro de sesión pero inválida** (caducada o cerrada desde otro sitio):
+  `Cloud.init()` lo detecta y entonces sí se pide entrar.
+- **«Seguir sin cuenta»** sigue existiendo para no dejar a nadie fuera sin
+  conexión, pero solo vale mientras la aplicación siga abierta
+  (`sessionStorage`, clave `airfryer:sinCuentaEstaSesion`). Al cerrarla y
+  volver, se pide entrar otra vez.
+- El formulario se abre **por encima** de la pantalla de entrada
+  (`.sheet--sobre-bienvenida`, z-index 125 contra 120). Si se cancela, se
+  vuelve a ella; no se cuela nadie en la aplicación sin haber decidido.
+- Al **cerrar sesión** se vuelve a la pantalla de entrada.
+
+### Dirección de los correos
+
+`SUPABASE_CONFIG.siteUrl` fija a dónde llevan los enlaces de confirmación y de
+entrada sin contraseña: **`https://luiiisss03.github.io/AirFryer/`**.
+
+Se usa esa y no la dirección desde la que se abrió la aplicación **a propósito**:
+el correo se abre casi siempre en el móvil, y un enlace a `localhost` apuntaría
+al ordenador de quien lo pidió. Va sin `#`, porque Supabase añade ahí su propio
+fragmento con el token; la aplicación deja la dirección en `#home` en cuanto lo
+procesa.
+
+**Hay que darla de alta en Supabase** → Authentication → URL Configuration:
+Site URL `https://luiiisss03.github.io/AirFryer/` y en Redirect URLs
+`https://luiiisss03.github.io/AirFryer/**`.
+
+---
+
+## 👀 Revisión externa (informático) — corregido
+
+- **Parpadeo al abrir**: se veía el splash, luego la aplicación un instante y
+  después la bienvenida encima. La causa era esperar a `Cloud.init()` (red) para
+  decidir si mostrarla. Ahora se decide **de forma síncrona** con
+  `esPrimerUso()`, que mira las preferencias, si hay datos y si existe una clave
+  `sb-…auth-token` en localStorage (`hayIndicioDeSesion()`). La bienvenida se
+  monta **antes** de que el splash se retire, por debajo de él (z-index 120
+  contra 200), así que la aplicación nunca llega a verse. Si luego resulta que
+  sí había sesión, se retira con `ocultarBienvenida()`.
+  **No mover `mostrarBienvenida()` después del temporizador del splash.**
+- **Login**: es propio (HTML y CSS de la aplicación) sobre el SDK `supabase-js`.
+  No se usa Supabase Auth UI.
+- **Sin botones de sincronizar**: teniendo base de datos, guardar y traer debe
+  ocurrir solo. Se quitaron «Sincronizar» y «Traer de la nube»; queda el estado
+  (`estadoSync()`: sin conexión / guardando / conflicto / guardado) y «Cerrar
+  sesión». El retardo de subida bajó de 4 s a 1,2 s para que marcar un favorito
+  se guarde casi al instante.
+- **Datos del perfil pulsables**: las seis tarjetas son botones que llevan a su
+  lista (favoritas → su vista; cocinadas y racha → historial; logros → su
+  sección; categorías → recetas; planificadas → semana).
+
+---
+
 ## 🧑‍🍳 Perfil y bienvenida
 
 - **Perfil**: nombre y avatar (emoji + color) en `prefs`, así que se sincronizan
@@ -207,9 +359,9 @@ se añaden recetas, el catálogo crece solo.
 que Supabase la acepte hay que declararla en **Authentication → URL
 Configuration**:
 
-- **Site URL**: la dirección pública (`https://TU-USUARIO.github.io/comidas-airfryer/`).
+- **Site URL**: la dirección pública (`https://luiiisss03.github.io/AirFryer/`).
 - **Redirect URLs**: añadir `http://127.0.0.1:5599/**` para probar en local
-  y `https://TU-USUARIO.github.io/**` para el móvil.
+  y `https://luiiisss03.github.io/AirFryer/**` para el móvil.
 
 Si no se hace, Supabase usa su valor por defecto `http://localhost:3000` y el
 enlace del correo lleva a una página que no existe (la cuenta **sí** queda
@@ -224,7 +376,7 @@ confirmada; solo falla el destino).
 ```
 
 O doble clic en `subir.bat`. Sube `CACHE_VERSION` de `sw.js` automáticamente,
-hace commit y push. Va por `airfryer-v13`.
+hace commit y push. Va por `airchef-v1`.
 
 El repositorio local está iniciado pero **sin commit inicial ni remoto**: falta
 configurar la identidad de git y crear el repositorio en GitHub (pasos en el

@@ -1,4 +1,4 @@
-# 🍗 AirFryer
+# 🍗 AirChef
 
 Aplicación web de recetas para freidora de aire. **250 recetas** que funcionan enteras en el navegador,
 sin conexión y sin cuenta: todo se guarda en `localStorage`.

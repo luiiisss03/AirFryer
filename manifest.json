@@ -1,7 +1,7 @@
 {
-  "name": "AirFryer · Recetas para freidora de aire",
-  "short_name": "AirFryer",
-  "description": "180 recetas, modo cocinar con temporizador, plan semanal y lista de la compra para tu freidora de aire.",
+  "name": "AirChef · Recetas para freidora de aire",
+  "short_name": "AirChef",
+  "description": "250 recetas, modo cocinar con temporizador, plan semanal y lista de la compra para tu freidora de aire.",
   "start_url": "./index.html",
   "scope": "./",
   "id": "airfryer-recetas",

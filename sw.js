@@ -1,5 +1,5 @@
 /* ============================================================
-   AirFryer · Service Worker
+   AirChef · Service Worker
    ------------------------------------------------------------
    Guarda los archivos de la aplicación en caché para que siga
    funcionando sin conexión una vez cargada por primera vez.
@@ -7,13 +7,14 @@
    actualización en los navegadores que ya la tengan instalada.
    ============================================================ */
 
-const CACHE_VERSION = 'airfryer-v13';
+const CACHE_VERSION = 'airchef-v1';
 
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './css/styles.css',
+  './img/logo.svg',
   './js/recipes.js',
   './js/photo-credits.js',
   './js/storage.js',
@@ -27,11 +28,18 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
+  /* Ojo: aquí NO se llama a skipWaiting(). Si la versión nueva tomara el
+     control de una página ya cargada, se mezclarían el HTML antiguo y los
+     scripts nuevos. Se queda esperando y la aplicación avisa al usuario;
+     cuando él acepta, manda SKIP_WAITING y recarga. */
   event.waitUntil(
-    caches.open(CACHE_VERSION)
-      .then(cache => cache.addAll(ASSETS))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_VERSION).then(cache => cache.addAll(ASSETS))
   );
+});
+
+/* La página pide relevo cuando el usuario acepta actualizar */
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {

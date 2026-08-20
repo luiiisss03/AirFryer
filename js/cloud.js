@@ -1,5 +1,5 @@
 /* ============================================================
-   AirFryer · Cuenta y sincronización (Supabase)
+   AirChef · Cuenta y sincronización (Supabase)
    ------------------------------------------------------------
    Capa opcional. Si no hay claves configuradas en
    js/supabase-config.js, todo esto queda desactivado y la
@@ -17,7 +17,7 @@
 
 const Cloud = (() => {
   const TABLA = 'airfryer_data';
-  const RETARDO_SUBIDA = 4000;   // ms de espera tras el último cambio
+  const RETARDO_SUBIDA = 1200;   // ms de espera tras el último cambio (agrupa ráfagas)
 
   let client = null;
   let user = null;
@@ -136,13 +136,35 @@ const Cloud = (() => {
   }
 
   /* Sube los cambios locales pasados unos segundos desde el último */
+  /* Un cambio llegado mientras se estaba subiendo. Antes se descartaba y no
+     se volvía a intentar, así que ese cambio no llegaba a la nube hasta el
+     siguiente. Ahora se recuerda y se sube al terminar. */
+  let subidaPendiente = false;
+
+  function programarSubida(retardo = RETARDO_SUBIDA) {
+    if (!user || conflictoSinResolver) return;
+    if (subiendo) { subidaPendiente = true; return; }
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => {
+      temporizador = null;
+      subir().catch(() => {});
+    }, retardo);
+  }
+
   function escucharCambios() {
-    window.addEventListener('airfryer:datachange', () => {
-      if (!user || conflictoSinResolver) return;
-      clearTimeout(temporizador);
-      temporizador = setTimeout(() => { subir().catch(() => {}); }, RETARDO_SUBIDA);
+    window.addEventListener('airfryer:datachange', () => programarSubida());
+
+    /* Guardar al salir: `visibilitychange` salta antes que `pagehide` y la
+       página todavía está viva, así que la petición llega a tiempo. En
+       `pagehide` muchas veces ya no daba tiempo. */
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'hidden') return;
+      if (user && temporizador && !conflictoSinResolver) {
+        clearTimeout(temporizador);
+        temporizador = null;
+        subir().catch(() => {});
+      }
     });
-    /* Antes de cerrar la pestaña, un último intento de guardar */
     window.addEventListener('pagehide', () => {
       if (user && temporizador && !conflictoSinResolver) { clearTimeout(temporizador); subir().catch(() => {}); }
     });
@@ -150,9 +172,20 @@ const Cloud = (() => {
 
   /* ─────────────── Sesión ─────────────── */
 
-  /** Dónde debe devolvernos Supabase tras confirmar el correo: a esta misma app.
-      La URL tiene que estar en Authentication → URL Configuration → Redirect URLs. */
-  const volverAqui = () => window.location.href.split('#')[0];
+  /**
+   * A dónde vuelve el usuario tras pulsar el enlace del correo.
+   *
+   * Se usa la dirección pública de `supabase-config.js`, no la actual: el
+   * correo se abre casi siempre en el móvil, y un enlace a `localhost`
+   * apuntaría al ordenador de quien lo pidió y no cargaría nada.
+   * Sin `#`: Supabase añade ahí su propio fragmento con el token, y la
+   * aplicación deja la dirección en `#home` en cuanto lo procesa.
+   */
+  const volverAqui = () => {
+    const c = typeof SUPABASE_CONFIG !== 'undefined' ? SUPABASE_CONFIG : null;
+    if (c && c.siteUrl) return String(c.siteUrl).replace(/#.*$/, '');
+    return window.location.href.split('#')[0];
+  };
 
   async function registrar(email, password) {
     if (!client) return { ok: false, error: 'La sincronización no está configurada.' };
@@ -233,25 +266,59 @@ const Cloud = (() => {
     return data || null;
   }
 
-  async function subir() {
+  /**
+   * Sube los datos de este dispositivo.
+   *
+   * Antes de escribir comprueba si otro aparato ha tocado la nube desde la
+   * última vez que sincronizamos. Si es así, fusiona en lugar de reemplazar:
+   * de lo contrario el último en subir borraba el trabajo del otro.
+   *
+   * `forzar` salta la fusión, para cuando el usuario ha pedido expresamente
+   * que su versión sustituya a la de la nube.
+   */
+  async function subir({ forzar = false } = {}) {
     if (!client || !user || subiendo) return { ok: false };
     conflictoSinResolver = false;   // subir a propósito ya es una decisión
     subiendo = true; avisar();
     try {
-      const payload = Store.exportAll();
-      const { error } = await client.from(TABLA).upsert({
+      let payload = Store.exportAll();
+      let fusionado = false;
+
+      if (!forzar) {
+        const fila = await leerNube();
+        const base = Store.syncBase.get();
+        const remoto = fila && fila.data && fila.data.data ? fila.data.data : null;
+        const selloRemoto = fila ? fila.updated_at : null;
+
+        /* Si el sello de la nube no es el que dejamos nosotros, ha escrito otro */
+        if (remoto && base && base.sello !== selloRemoto) {
+          const fusion = Store.merge3(base.data, payload.data, remoto);
+          Store.importAll(fusion);          // el resultado se aplica también aquí
+          payload = Store.exportAll();
+          fusionado = true;
+          console.info('[nube] cambios de otro dispositivo fusionados con los de aquí');
+        }
+      }
+
+      /* El disparador de la tabla reescribe updated_at, así que hay que leer
+         el valor que ha quedado de verdad para poder compararlo la próxima vez. */
+      const { data: guardada, error } = await client.from(TABLA).upsert({
         user_id: user.id,
         data: payload,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' });
+      }, { onConflict: 'user_id' }).select('updated_at').maybeSingle();
       if (error) throw error;
+
+      Store.syncBase.set({ sello: guardada ? guardada.updated_at : null, data: payload.data });
       ultimaSync = Date.now();
-      return { ok: true };
+      return { ok: true, fusionado };
     } catch (e) {
       console.warn('No se ha podido subir:', e);
       return { ok: false, error: traducir(e) };
     } finally {
       subiendo = false; avisar();
+      /* Si mientras subíamos llegó otro cambio, se sube ahora */
+      if (subidaPendiente) { subidaPendiente = false; programarSubida(600); }
     }
   }
 
@@ -264,6 +331,8 @@ const Cloud = (() => {
       if (!fila || !fila.data) return { ok: true, vacio: true };
       const res = Store.importAll(fila.data);
       if (!res.ok) return { ok: false, error: res.error };
+      /* Lo que acabamos de bajar pasa a ser la base con la que comparar */
+      Store.syncBase.set({ sello: fila.updated_at, data: fila.data.data || fila.data });
       ultimaSync = Date.now();
       return { ok: true };
     } catch (e) {
@@ -301,11 +370,6 @@ const Cloud = (() => {
     }
   }
 
-  async function sincronizarAhora() {
-    if (!user) return { ok: false, error: 'No has iniciado sesión.' };
-    return subir();
-  }
-
   /* ─────────────── API pública ─────────────── */
 
   return {
@@ -315,7 +379,7 @@ const Cloud = (() => {
     registrar, entrar, entrarConEnlace, salir, traducir,
     conflictoInicial: () => conflictoInicial,
     olvidarConflictoInicial: () => { conflictoInicial = null; },
-    subir, bajar, sincronizarAhora,
+    subir, bajar,
     alCambiar: (fn) => { oyentes.push(fn); fn(estadoActual()); }
   };
 })();

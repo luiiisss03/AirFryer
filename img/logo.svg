@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="AirChef">
+  <title>AirChef</title>
+
+  <!-- Arcos de aire caliente: envuelven el aparato por los dos lados -->
+  <g fill="none" stroke="#FF9D2E" stroke-width="3.6" stroke-linecap="round">
+    <path d="M34 25A30 30 0 0 0 34 81"/>
+    <path d="M66 25A30 30 0 0 1 66 81"/>
+  </g>
+
+  <!-- Gorro de chef -->
+  <g>
+    <path d="M34 33a10.5 10.5 0 0 1 6.4-19 12.5 12.5 0 0 1 19.2 0A10.5 10.5 0 0 1 66 33z"
+          fill="#FFFFFF" stroke="#252A31" stroke-width="3.2" stroke-linejoin="round"/>
+    <path d="M37 33h26v6.5H37z" fill="#FFFFFF" stroke="#252A31" stroke-width="3.2" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Cuerpo de la freidora -->
+  <rect x="27" y="38" width="46" height="46" rx="7.5" fill="#2B3038"/>
+
+  <!-- Panel: piloto y mando -->
+  <circle cx="50" cy="45.5" r="1.6" fill="#FF9D2E"/>
+  <circle cx="50" cy="54" r="5.4" fill="none" stroke="#8A929C" stroke-width="1.9"/>
+  <path d="M50 51v6" stroke="#FF9D2E" stroke-width="2.1" stroke-linecap="round"/>
+
+  <!-- Cajón y asa -->
+  <path d="M29.5 64h41v13.5a6.5 6.5 0 0 1-6.5 6.5H36a6.5 6.5 0 0 1-6.5-6.5z" fill="#20242B"/>
+  <path d="M29.5 64h41" stroke="#454C57" stroke-width="1.3" stroke-linecap="round"/>
+  <rect x="45.5" y="63" width="9" height="17" rx="4.5" fill="#FF8C1A" stroke="#FFFFFF" stroke-width="1.6"/>
+
+  <!-- Patas -->
+  <rect x="33" y="84" width="7" height="3.4" rx="1.7" fill="#2B3038"/>
+  <rect x="60" y="84" width="7" height="3.4" rx="1.7" fill="#2B3038"/>
+</svg>

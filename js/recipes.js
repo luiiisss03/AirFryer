@@ -1,5 +1,5 @@
 /* ============================================================
-   AirFryer · Datos de la aplicación
+   AirChef · Datos de la aplicación
    ------------------------------------------------------------
    Todo el contenido vive aquí: categorías, etiquetas y recetas.
    Sin APIs, sin backend, sin base de datos.

@@ -1,5 +1,5 @@
 /* ============================================================
-   AirFryer · Lógica de la aplicación
+   AirChef · Lógica de la aplicación
    ------------------------------------------------------------
    Vanilla JS (ES6+). Sin dependencias, sin red, sin backend.
 
@@ -82,6 +82,18 @@ const tagInfo = (key) => TAGS.find(t => t.key === key) || { label: key, emoji: '
 
 /** Temperatura corregida con el ajuste personal del usuario. */
 const adjTemp = (recipe) => recipe.temperature + (Number(Store.prefs.get('tempOffset')) || 0);
+
+/**
+ * Aplica el mismo ajuste a las temperaturas escritas dentro de un texto.
+ * Sin esto, la ficha decía "210 °C (ajustado +10°)" mientras el primer paso
+ * seguía diciendo "precalienta a 200 °C": dos cifras distintas en la misma
+ * pantalla. Solo se tocan los grados; los minutos se quedan como están.
+ */
+function adjTempTexto(texto) {
+  const offset = Number(Store.prefs.get('tempOffset')) || 0;
+  if (!offset) return texto;
+  return String(texto).replace(/(\d{2,3})\s*°\s*C/g, (_, grados) => `${Number(grados) + offset} °C`);
+}
 
 /** Mensajes flotantes. */
 function toast(message, icon = '✅') {
@@ -230,7 +242,7 @@ const ACHIEVEMENTS = [
   { key: 'critic',   emoji: '📝', name: 'Crítico gastronómico',desc: 'Valora o anota 5 recetas',           test: s => s.notes >= 5 },
   { key: 'baker',    emoji: '🧁', name: 'Repostero',           desc: 'Cocina 5 postres',                   test: s => s.byCat.postres >= 5 },
   { key: 'veggie',   emoji: '🥦', name: 'Muy verde',           desc: 'Cocina 5 recetas de verduras',       test: s => s.byCat.verduras >= 5 },
-  { key: 'master',   emoji: '🏆', name: 'Maestro de la Air Fryer', desc: 'Cocina 40 recetas',              test: s => s.cooked >= 40 },
+  { key: 'master',   emoji: '🏆', name: 'Maestro de la air fryer', desc: 'Cocina 40 recetas',              test: s => s.cooked >= 40 },
   { key: 'legend',   emoji: '👑', name: 'Leyenda',             desc: 'Cocina 100 recetas',                 test: s => s.cooked >= 100 }
 ];
 
@@ -886,7 +898,7 @@ function renderRecipeSheet() {
             <li class="step">
               <span class="step__num">${String(i + 1).padStart(2, '0')}</span>
               <div class="step__txt">
-                ${esc(s.t)}
+                ${esc(adjTempTexto(s.t))}
                 ${s.timer ? `<span class="step__timer">⏱️ ${s.timer} min</span>` : ''}
               </div>
             </li>`).join('')}
@@ -895,7 +907,7 @@ function renderRecipeSheet() {
 
       <section class="rcp__section rcp__tips">
         <h3>💡 Consejos para air fryer</h3>
-        <ul>${r.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+        <ul>${r.tips.map(t => `<li>${esc(adjTempTexto(t))}</li>`).join('')}</ul>
       </section>
 
       <section class="rcp__section rcp__notes">
@@ -928,12 +940,12 @@ function recipeAsText(r, servings = r.servings) {
     ...r.ingredients.map(i => '· ' + ingredientText(i, factor)),
     '',
     'PASOS',
-    ...r.steps.map((s, i) => `${i + 1}. ${s.t}`),
+    ...r.steps.map((s, i) => `${i + 1}. ${adjTempTexto(s.t)}`),
     '',
     'CONSEJOS',
     ...r.tips.map(t => '· ' + t),
     '',
-    'Receta de AirFryer 🍗'
+    'Receta de AirChef 🍗'
   ].join('\n');
 }
 
@@ -1008,8 +1020,10 @@ function renderCookStep() {
     <div class="cook__progress"><span style="width:${progress}%"></span></div>
 
     <div class="cook__body">
-      <p class="cook__count">PASO ${step + 1} DE ${total}</p>
-      <p class="cook__step">${esc(current.t)}</p>
+      <div class="cook__texto">
+        <p class="cook__count">PASO ${step + 1} DE ${total}</p>
+        <p class="cook__step">${esc(adjTempTexto(current.t))}</p>
+      </div>
 
       <div class="timer" id="timerBox">
         <div class="timer__ring" id="timerRing">
@@ -1046,7 +1060,7 @@ function renderCookStep() {
         : `<button class="btn btn--primary" data-cook-step="1">Siguiente →</button>`}
     </footer>`;
 
-  if (voiceOn) speak(`Paso ${step + 1} de ${total}. ${current.t}`);
+  if (voiceOn) speak(`Paso ${step + 1} de ${total}. ${adjTempTexto(current.t)}`);
 }
 
 function fmtClock(seconds) {
@@ -1307,7 +1321,7 @@ function weekAsText() {
     }).filter(Boolean);
     if (parts.length) lines.push(day.label.toUpperCase(), ...parts, '');
   });
-  lines.push('Plan hecho con AirFryer 🍗');
+  lines.push('Plan hecho con AirChef 🍗');
   return lines.join('\n');
 }
 
@@ -1584,7 +1598,7 @@ function shoppingAsText() {
   });
   const done = items.filter(i => i.done);
   if (done.length) lines.push('YA COMPRADO', ...done.map(i => `· ${i.name}`), '');
-  lines.push('Lista hecha con AirFryer 🍗');
+  lines.push('Lista hecha con AirChef 🍗');
   return lines.join('\n');
 }
 
@@ -1627,13 +1641,22 @@ function checkAchievements() {
 function renderProfile() {
   renderMeCard();
   const s = progressStats();
-  $('#statsGrid').innerHTML = `
-    <div class="stat"><b>🍽️</b><span>${s.cooked}</span><small>Recetas cocinadas</small></div>
-    <div class="stat"><b>❤️</b><span>${s.favs}</span><small>Favoritas</small></div>
-    <div class="stat"><b>🔥</b><span>${s.streak}</span><small>Días de racha</small></div>
-    <div class="stat"><b>🏆</b><span>${s.achievements}/${ACHIEVEMENTS.length}</span><small>Logros</small></div>
-    <div class="stat"><b>🧭</b><span>${s.cats}/${CATEGORIES.length}</span><small>Categorías probadas</small></div>
-    <div class="stat"><b>📅</b><span>${s.week}/14</span><small>Comidas planificadas</small></div>`;
+  /* Cada dato lleva a la lista que hay detrás: ver el número sin poder abrirlo
+     dejaba al usuario con la pregunta de "¿y cuáles son?". */
+  const stat = (emoji, valor, etiqueta, destino, pista) => `
+    <button class="stat" ${destino} aria-label="${esc(etiqueta)}: ${esc(String(valor))}. ${esc(pista)}">
+      <b>${emoji}</b><span>${valor}</span><small>${esc(etiqueta)}</small>
+      <i class="stat__ir">${esc(pista)} →</i>
+    </button>`;
+
+  $('#statsGrid').innerHTML = [
+    stat('🍽️', s.cooked, 'Recetas cocinadas', 'data-ir="historial"', 'Ver historial'),
+    stat('❤️', s.favs, 'Favoritas', 'data-nav="favorites"', 'Ver favoritas'),
+    stat('🔥', s.streak, 'Días de racha', 'data-ir="historial"', 'Ver historial'),
+    stat('🏆', `${s.achievements}/${ACHIEVEMENTS.length}`, 'Logros', 'data-ir="logros"', 'Ver logros'),
+    stat('🧭', `${s.cats}/${CATEGORIES.length}`, 'Categorías probadas', 'data-nav="recipes"', 'Ver recetas'),
+    stat('📅', `${s.week}/14`, 'Comidas planificadas', 'data-nav="week"', 'Ver mi semana')
+  ].join('');
 
   $('#achieveMeta').textContent = `${Store.achievements.count()} de ${ACHIEVEMENTS.length}`;
   $('#achievementsGrid').innerHTML = ACHIEVEMENTS.map(a => {
@@ -1925,7 +1948,7 @@ async function importData(file) {
     updateShopDot();
     toast('Datos restaurados correctamente', '✅');
   } catch (e) {
-    toast('El archivo no es una copia válida de AirFryer', '⚠️');
+    toast('El archivo no es una copia válida de AirChef', '⚠️');
   }
 }
 
@@ -2098,7 +2121,7 @@ function bindEvents() {
       const btn = $('#cookVoice');
       btn.textContent = next === 'on' ? '🔊' : '🔇';
       btn.classList.toggle('is-on', next === 'on');
-      if (next === 'on') speak(state.cook.recipe.steps[state.cook.step].t);
+      if (next === 'on') speak(adjTempTexto(state.cook.recipe.steps[state.cook.step].t));
       else stopSpeaking();
       return;
     }
@@ -2275,15 +2298,37 @@ function bindEvents() {
     }
 
     /* — Bienvenida — */
-    if (e.target.closest('#welcomeSkip')) { cerrarBienvenida(); return; }
-    if (e.target.closest('#welcomeSignup')) {
+    if (e.target.closest('#welcomeSkip')) {
+      /* Elección voluntaria de usar la aplicación sin cuenta: se respeta
+         mientras no cierre la aplicación. */
+      try { sessionStorage.setItem(SIN_CUENTA, '1'); } catch (err) {}
       cerrarBienvenida();
-      setTimeout(() => { openAuth(); authModo = 'registro'; paintAuth(); }, 340);
+      return;
+    }
+    /* El formulario se abre ENCIMA de la pantalla de entrada. Si se cancela,
+       se vuelve a ella en lugar de colarse en la aplicación sin haber entrado. */
+    if (e.target.closest('#welcomeSignup')) {
+      openAuth({ sobreBienvenida: true });
+      authModo = 'registro';
+      paintAuth();
       return;
     }
     if (e.target.closest('#welcomeLogin')) {
-      cerrarBienvenida();
-      setTimeout(openAuth, 340);
+      openAuth({ sobreBienvenida: true });
+      return;
+    }
+
+    /* — Datos del perfil que llevan a su lista — */
+    const ir = e.target.closest('[data-ir]');
+    if (ir) {
+      const destinos = { historial: '#historyList', logros: '#achievementsGrid' };
+      const sec = $(destinos[ir.dataset.ir]);
+      if (sec) {
+        const titulo = sec.closest('.section') || sec;
+        titulo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        titulo.classList.add('is-destacada');
+        setTimeout(() => titulo.classList.remove('is-destacada'), 1400);
+      }
       return;
     }
 
@@ -2477,8 +2522,8 @@ function bindEvents() {
     const ids = typeof PHOTO_CREDITS !== 'undefined' ? Object.keys(PHOTO_CREDITS) : [];
     $('#creditsBody').innerHTML = ids.length ? `
       <p class="dice__intro">
-        Las fotos proceden de <a href="https://openverse.org" target="_blank" rel="noopener">Openverse</a>
-        y se usan bajo licencia Creative Commons. Gracias a sus autores.
+        Las fotos proceden de <a href="https://www.pexels.com" target="_blank" rel="noopener">Pexels</a>,
+        con licencia libre para uso comercial. Se acredita igualmente a cada fotógrafo.
       </p>
       <ul class="credits">
         ${ids.map(id => {
@@ -2502,28 +2547,6 @@ function bindEvents() {
   document.addEventListener('click', async (e) => {
     if (e.target.closest('#cloudIn')) { openAuth(); return; }
 
-    if (e.target.closest('#cloudSync')) {
-      const res = await Cloud.sincronizarAhora();
-      toast(res.ok ? 'Datos guardados en tu cuenta' : (res.error || 'No se ha podido sincronizar'),
-            res.ok ? '☁️' : '⚠️');
-      renderAccount();
-      return;
-    }
-
-    if (e.target.closest('#cloudDown')) {
-      const ok = await confirmAction({
-        title: 'Traer los datos de la nube',
-        text: 'Se reemplazarán los datos de este dispositivo por los de tu cuenta.',
-        icon: '⬇️', ok: 'Sí, traerlos'
-      });
-      if (!ok) return;
-      const res = await Cloud.bajar();
-      if (res.ok && res.vacio) toast('Todavía no hay nada guardado en tu cuenta', 'ℹ️');
-      else if (res.ok) { refrescarTodo(); toast('Datos recuperados', '☁️'); }
-      else toast(res.error || 'No se han podido traer los datos', '⚠️');
-      return;
-    }
-
     if (e.target.closest('#cloudOut')) {
       const ok = await confirmAction({
         title: 'Cerrar sesión',
@@ -2533,6 +2556,10 @@ function bindEvents() {
       if (!ok) return;
       await Cloud.salir();
       toast('Sesión cerrada', '👋');
+      refrescarTodo();
+      /* Sin sesión, lo primero vuelve a ser la pantalla de entrada */
+      try { sessionStorage.removeItem(SIN_CUENTA); } catch (err) {}
+      mostrarBienvenida();
       return;
     }
 
@@ -2564,9 +2591,12 @@ function bindEvents() {
 
     closeSheet($('#authSheet'));
     $('#authPassword').value = '';
+    /* Ya hay sesión: la pantalla de entrada deja de tener sentido */
+    ocultarBienvenida();
     toast(authModo === 'entrar' ? '¡Hola de nuevo!' : '¡Cuenta creada!', '☁️');
     if (res.conflicto) await resolverConflicto(res.conflicto);
     else refrescarTodo();
+    navigate('home', { replace: true });
   });
 
   /* Enlace mágico, para no tener que recordar contraseña */
@@ -2720,7 +2750,7 @@ function bindEvents() {
     Store.wipeUserData();
 
     if (tambienLaNube) {
-      const res = await Cloud.subir();     // sube el estado vacío a propósito
+      const res = await Cloud.subir({ forzar: true });   // sube el vacío a propósito
       toast(res.ok ? 'Datos borrados aquí y en tu cuenta' : 'Borrado aquí, pero la cuenta no se ha podido actualizar',
             res.ok ? '🗑️' : '⚠️');
     } else if (conectado) {
@@ -2811,11 +2841,20 @@ function bindEvents() {
   window.addEventListener('appinstalled', () => {
     state.installPrompt = null;
     refreshInstallButton();
-    toast('¡AirFryer instalada en tu dispositivo! 📲', '📲');
+    toast('¡AirChef instalada en tu dispositivo! 📲', '📲');
   });
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && !$('#cookMode').hidden) requestWakeLock();
+  });
+
+  /* El navegador ha rechazado guardar (almacenamiento lleno o bloqueado).
+     Se avisa una sola vez para no atosigar. */
+  let avisadoAlmacenamiento = false;
+  window.addEventListener('airfryer:storagefull', () => {
+    if (avisadoAlmacenamiento) return;
+    avisadoAlmacenamiento = true;
+    toast('No se ha podido guardar: el almacenamiento del navegador está lleno', '⚠️');
   });
 }
 
@@ -2827,9 +2866,46 @@ function bindEvents() {
    Obligar al login dejaría la aplicación inservible sin conexión, que es
    justo donde más se usa. */
 
+/**
+ * ¿Hay una sesión guardada en este navegador?
+ *
+ * Se mira directamente el almacenamiento de Supabase porque hace falta
+ * saberlo **sin esperar a la red**: si se espera, la aplicación se ve un
+ * instante y la bienvenida aparece encima después, que era justo el
+ * parpadeo que se veía al abrir.
+ */
+function hayIndicioDeSesion() {
+  try {
+    return Object.keys(localStorage).some(k => k.startsWith('sb-') && k.includes('auth-token'));
+  } catch (e) { return false; }
+}
+
+/** ¿Es la primera vez que se abre? Se decide sin consultar a la nube. */
+function esPrimerUso() {
+  return !Store.prefs.get('welcomed') && !Store.hasData() && !hayIndicioDeSesion();
+}
+
+/* Quien elige entrar sin cuenta no vuelve a ver la pantalla mientras siga
+   con la aplicación abierta. Al cerrarla y volver, se le pregunta otra vez. */
+const SIN_CUENTA = 'airfryer:sinCuentaEstaSesion';
+const eligioSinCuenta = () => {
+  try { return !!sessionStorage.getItem(SIN_CUENTA); } catch (e) { return false; }
+};
+
+/**
+ * Primero se mira si hay sesión: si la hay se va directo al inicio, y si no,
+ * lo primero que se ve es la pantalla de entrada.
+ * Todo se decide sin esperar a la red, mirando si Supabase tiene una sesión
+ * guardada en este navegador.
+ */
+function hayQuePedirEntrar() {
+  if (!Cloud.configurado()) return false;   // sin cuenta configurada no aplica
+  if (hayIndicioDeSesion()) return false;   // ya está dentro: al inicio
+  return !eligioSinCuenta();
+}
+
 function mostrarBienvenida() {
-  /* Si ya hay sesión o datos guardados, esto no es un primer uso */
-  if (Store.prefs.get('welcomed') || Store.hasData()) return;
+  if (!hayQuePedirEntrar()) return;
   if (Cloud.estado().estado === 'conectado') return;
 
   const el = $('#welcome');
@@ -2839,8 +2915,28 @@ function mostrarBienvenida() {
     $('#welcomeLogin').hidden = true;
     $('#welcomeSkip').textContent = 'Empezar a cocinar →';
   }
+
+  /* Quien ya ha usado la aplicación no necesita que le den la bienvenida
+     otra vez: lo que quiere es entrar. */
+  if (!esPrimerUso()) {
+    $('#welcomeTitulo').innerHTML = 'Entra en <span>AirChef</span>';
+    $('#welcomeSub').textContent = 'Entra con tu cuenta para tener tus recetas y tu progreso en todos tus dispositivos.';
+    $('#welcomeLogin').textContent = 'Entrar';
+    $('#welcomeSignup').textContent = 'Crear una cuenta';
+    $('#welcomePuntos').hidden = true;
+    /* El botón principal pasa a ser "Entrar" */
+    $('#welcomeLogin').classList.add('btn--primary');
+    $('#welcomeLogin').classList.remove('btn--ghost');
+    $('#welcomeSignup').classList.add('btn--ghost');
+    $('#welcomeSignup').classList.remove('btn--primary');
+    $('#welcomeLogin').style.order = '-1';        // "Entrar" arriba del todo
+  }
   el.hidden = false;
-  requestAnimationFrame(() => el.classList.add('is-in'));
+  /* rAF más temporizador de respaldo: si la pestaña no está componiendo,
+     rAF no llega a ejecutarse y el panel se quedaría invisible. */
+  const mostrar = () => el.classList.add('is-in');
+  requestAnimationFrame(mostrar);
+  setTimeout(mostrar, 80);
 }
 
 function cerrarBienvenida() {
@@ -2849,6 +2945,15 @@ function cerrarBienvenida() {
   Store.prefs.set('welcomed', true);
   el.classList.remove('is-in');
   setTimeout(() => { el.hidden = true; }, 320);
+}
+
+/** Retirada inmediata, sin animación: se usa cuando resulta que sí hay sesión. */
+function ocultarBienvenida() {
+  const el = $('#welcome');
+  if (!el || el.hidden) return;
+  el.classList.remove('is-in');
+  el.hidden = true;
+  Store.prefs.set('welcomed', true);
 }
 
 /* ══════════════ TU PERFIL: NOMBRE Y AVATAR ══════════════ */
@@ -2959,6 +3064,21 @@ function saveMeSheet() {
   toast(name ? `¡Hecho, ${name}!` : 'Perfil actualizado', meDraft.avatar);
 }
 
+/**
+ * Texto del estado de sincronización.
+ *
+ * Ya no hay botones de "Sincronizar" ni "Traer de la nube": teniendo base de
+ * datos, eso debe ocurrir solo. Lo único que hace falta es que se vea qué
+ * está pasando.
+ */
+function estadoSync(s) {
+  if (!navigator.onLine) return '📴 Sin conexión · se guardará al volver';
+  if (s.subiendo) return '⏳ Guardando…';
+  if (s.conflictoPendiente) return '⚠️ Hay que decidir qué copia conservar';
+  if (s.ultimaSync) return '✅ Guardado ' + formatDate(s.ultimaSync).toLowerCase();
+  return '✅ Tus datos se guardan solos';
+}
+
 function renderAccount() {
   const caja = $('#accountCard');
   if (!caja) return;
@@ -2983,13 +3103,9 @@ function renderAccount() {
         <span class="account__icon">☁️</span>
         <div class="account__txt">
           <b>${esc(s.email || 'Sesión iniciada')}</b>
-          <small>${s.subiendo ? 'Sincronizando…'
-                  : s.ultimaSync ? 'Guardado ' + formatDate(s.ultimaSync).toLowerCase()
-                  : 'Tus datos se guardan solos'}</small>
+          <small class="account__estado">${estadoSync(s)}</small>
         </div>
         <div class="account__actions">
-          <button class="btn btn--ghost btn--sm" id="cloudSync" ${s.subiendo ? 'disabled' : ''}>🔄 Sincronizar</button>
-          <button class="btn btn--ghost btn--sm" id="cloudDown">⬇️ Traer de la nube</button>
           <button class="btn btn--danger-ghost btn--sm" id="cloudOut">Cerrar sesión</button>
         </div>
       </div>`;
@@ -3026,9 +3142,11 @@ function renderAccount() {
 /* Estado del formulario de la cuenta: 'entrar' o 'crear' */
 let authModo = 'entrar';
 
-function openAuth() {
+function openAuth({ sobreBienvenida = false } = {}) {
   authModo = 'entrar';
   paintAuth();
+  /* Sobre la pantalla de entrada hace falta más altura de apilado que ella */
+  $('#authSheet').classList.toggle('sheet--sobre-bienvenida', sobreBienvenida);
   openSheet('authSheet');
 }
 
@@ -3085,7 +3203,8 @@ async function resolverConflicto(info) {
     return;
   }
   if (eleccion === 'subir') {
-    const res = await Cloud.subir();
+    /* El usuario ha pedido que su versión sustituya a la de la nube */
+    const res = await Cloud.subir({ forzar: true });
     toast(res.ok ? 'Se han subido los datos de este dispositivo' : (res.error || 'No se han podido subir'),
           res.ok ? '☁️' : '⚠️');
     return;
@@ -3135,7 +3254,7 @@ function refreshFavButtons(id) {
  * de carga puesta para siempre y sin forma de borrar los datos culpables.
  */
 function rescate(error) {
-  console.error('AirFryer no ha podido arrancar:', error);
+  console.error('AirChef no ha podido arrancar:', error);
   try {
     const splash = $('#splash');
     if (splash) splash.remove();
@@ -3160,7 +3279,7 @@ function rescate(error) {
     /* Si hasta el rescate falla, al menos que no quede una pantalla muerta */
     document.documentElement.innerHTML =
       '<body style="font-family:sans-serif;padding:32px;text-align:center">' +
-      '<h1>AirFryer</h1><p>No se ha podido abrir la aplicación.</p>' +
+      '<h1>AirChef</h1><p>No se ha podido abrir la aplicación.</p>' +
       '<p><a href="?reset=1">Reiniciar</a></p></body>';
   }
 }
@@ -3203,6 +3322,11 @@ function init() {
 
   clearTimeout(window.__airfryerGuard);   // el arranque ha llegado hasta aquí
 
+  /* La bienvenida se monta AHORA, todavía por debajo del splash (z-index 200
+     contra 120). Así, al desvanecerse el splash, ya está puesta y no se ve un
+     instante la aplicación antes de que aparezca. */
+  mostrarBienvenida();
+
   setTimeout(() => {
     const splash = $('#splash');
     if (!splash) return;
@@ -3227,9 +3351,20 @@ function init() {
     }
   });
   Cloud.init().then(() => {
-    /* Se espera a saber si hay sesión: si la hay, no es un primer uso.
-       El retardo deja que el splash termine de salir. */
-    if (!vieneDelCorreo) setTimeout(mostrarBienvenida, 900);
+    const s = Cloud.estado();
+    /* Si resulta que sí había sesión, la bienvenida sobra: se retira sin más */
+    if (s.estado === 'conectado') { ocultarBienvenida(); return seguirTrasCorreo(); }
+
+    /* Y al revés: había rastro de sesión pero ya no vale (caducada o cerrada
+       desde otro sitio). Entonces sí hay que pedir entrar. */
+    if (s.estado === 'sin-sesion' && !vieneDelCorreo) mostrarBienvenida();
+    return seguirTrasCorreo();
+  }).catch(err => {
+    /* La nube es opcional: si falla, la aplicación local debe seguir viva */
+    console.warn('La sincronización no ha podido arrancar:', err);
+  });
+
+  function seguirTrasCorreo() {
 
     if (!vieneDelCorreo) return;
     /* Se lee la copia guardada al arrancar: Supabase ya ha borrado el hash real. */
@@ -3245,14 +3380,11 @@ function init() {
       console.info('[cuenta] sesión iniciada desde el enlace del correo');
       toast('¡Cuenta confirmada! Ya estás dentro 🎉', '☁️');
       refrescarTodo();
-      navigate('profile');
+      navigate('home', { replace: true });
     }
-  }).catch(err => {
-    /* La nube es opcional: si falla, la aplicación local debe seguir viva */
-    console.warn('La sincronización no ha podido arrancar:', err);
-  });
+  }
 
-  console.log(`🍗 AirFryer · ${RECIPE_COUNT} recetas cargadas · almacenamiento ${Store.isAvailable() ? 'activo' : 'no disponible'}`);
+  console.log(`🍗 AirChef · ${RECIPE_COUNT} recetas cargadas · almacenamiento ${Store.isAvailable() ? 'activo' : 'no disponible'}`);
 }
 
 /** Permite usar la aplicación sin conexión. Solo funciona sobre http(s). */
@@ -3261,7 +3393,60 @@ function registerServiceWorker() {
   if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js')
+      .then(vigilarActualizaciones)
       .catch(err => console.warn('No se ha podido activar el modo sin conexión:', err.message));
+  });
+}
+
+/**
+ * Avisa cuando hay una versión nueva instalada.
+ *
+ * Al publicar cambios, la copia guardada se sirve primero y la nueva se
+ * descarga por detrás: sin este aviso el usuario seguía viendo la versión
+ * anterior sin saber que había otra lista, a veces durante días.
+ */
+function vigilarActualizaciones(reg) {
+  if (!reg) return;
+
+  const proponerRecarga = () => {
+    /* Recargar en mitad de una receta sería muy molesto */
+    if (!$('#cookMode').hidden) return;
+    if ($('#avisoVersion')) return;
+    const aviso = document.createElement('div');
+    aviso.className = 'update-bar';
+    aviso.id = 'avisoVersion';
+    aviso.innerHTML = `
+      <span>Hay una versión nueva de AirChef</span>
+      <button class="btn btn--primary btn--sm" id="recargarVersion">Actualizar</button>
+      <button class="icon-btn icon-btn--sm" id="cerrarAvisoVersion" aria-label="Ahora no">✕</button>`;
+    document.body.appendChild(aviso);
+    requestAnimationFrame(() => aviso.classList.add('is-in'));
+    $('#recargarVersion').addEventListener('click', () => {
+      const esperando = reg.waiting;
+      if (!esperando) { location.reload(); return; }
+      /* Se pide el relevo y se recarga cuando la versión nueva toma el mando */
+      let recargado = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (recargado) return;
+        recargado = true;
+        location.reload();
+      });
+      esperando.postMessage({ type: 'SKIP_WAITING' });
+      setTimeout(() => { if (!recargado) { recargado = true; location.reload(); } }, 2000);
+    });
+    $('#cerrarAvisoVersion').addEventListener('click', () => aviso.remove());
+  };
+
+  /* Ya había una versión esperando cuando abrimos */
+  if (reg.waiting && navigator.serviceWorker.controller) proponerRecarga();
+
+  reg.addEventListener('updatefound', () => {
+    const nuevo = reg.installing;
+    if (!nuevo) return;
+    nuevo.addEventListener('statechange', () => {
+      /* "installed" con un controlador ya presente = actualización, no primera visita */
+      if (nuevo.state === 'installed' && navigator.serviceWorker.controller) proponerRecarga();
+    });
   });
 }
 
