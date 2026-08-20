@@ -1,0 +1,4 @@
+# Finales de línea consistentes (evita avisos de LF/CRLF en Windows)
+* text=auto eol=lf
+*.bat text eol=crlf
+*.png binary

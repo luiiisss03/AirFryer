@@ -1,0 +1,25 @@
+{
+  "name": "AirFryer · Recetas para freidora de aire",
+  "short_name": "AirFryer",
+  "description": "180 recetas, modo cocinar con temporizador, plan semanal y lista de la compra para tu freidora de aire.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "airfryer-recetas",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF8F2",
+  "theme_color": "#FF6B2C",
+  "lang": "es",
+  "dir": "ltr",
+  "categories": ["food", "lifestyle"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Buscar receta", "short_name": "Buscar", "url": "./index.html#recipes" },
+    { "name": "Lista de la compra", "short_name": "Compra", "url": "./index.html#shopping" },
+    { "name": "Mi semana", "short_name": "Semana", "url": "./index.html#week" }
+  ]
+}

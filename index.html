@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="AirFryer — Recetas para freidora de aire. Busca, cocina, planifica tu semana y organiza tu lista de la compra.">
+  <meta name="theme-color" content="#FF6B2C">
+  <title>AirFryer · Recetas para freidora de aire</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍗</text></svg>">
+  <!-- iOS no lee el manifest: necesita su propio icono PNG y sus metadatos -->
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="AirFryer">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- ══════════ SPLASH ══════════ -->
+  <div class="splash" id="splash">
+    <div class="splash__logo">🍗</div>
+    <div class="splash__name">AirFryer</div>
+    <div class="splash__bar"><span></span></div>
+  </div>
+
+  <!-- ══════════ RESCATE ══════════
+       Si el arranque falla, esto sustituye al splash para que nunca se quede
+       una pantalla de carga eterna sin salida. -->
+  <div class="rescue" id="rescue" hidden>
+    <div class="rescue__panel">
+      <div class="rescue__ico">🍳</div>
+      <h1>La aplicación no ha podido abrirse</h1>
+      <p id="rescueText">Puede que haya algún dato guardado en mal estado.</p>
+      <div class="rescue__actions">
+        <button class="btn btn--ghost btn--wide" id="rescueReload">🔄 Volver a intentarlo</button>
+        <button class="btn btn--primary btn--wide" id="rescueRepair">🧹 Reparar mis datos y entrar</button>
+      </div>
+      <p class="rescue__note">Reparar borra los datos guardados en este dispositivo
+        (favoritos, semana, compra y progreso). Las recetas no se tocan. Si tienes
+        cuenta, podrás recuperarlos al iniciar sesión.</p>
+      <details class="rescue__detail">
+        <summary>Detalle técnico</summary>
+        <pre id="rescueError"></pre>
+      </details>
+    </div>
+  </div>
+
+  <!-- ══════════ HEADER (desktop) ══════════ -->
+  <header class="topbar" id="topbar">
+    <div class="topbar__inner">
+      <button class="brand" data-nav="home" aria-label="AirFryer, inicio">
+        <span class="brand__icon">🍗</span>
+        <span class="brand__text">Air<b>Fryer</b></span>
+      </button>
+
+      <nav class="topnav" aria-label="Navegación principal">
+        <button class="topnav__link is-active" data-nav="home">Inicio</button>
+        <button class="topnav__link" data-nav="recipes">Recetas</button>
+        <button class="topnav__link" data-nav="week">Mi semana</button>
+        <button class="topnav__link" data-nav="shopping">Lista de compra</button>
+        <button class="topnav__link" data-nav="favorites">Favoritos</button>
+        <button class="topnav__link" data-nav="profile">Mi progreso</button>
+      </nav>
+
+      <div class="topbar__actions">
+        <button class="icon-btn" id="themeToggle" title="Cambiar tema" aria-label="Cambiar tema">
+          <span data-theme-icon>🌙</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app" id="app">
+
+    <!-- ══════════ VISTA: INICIO ══════════ -->
+    <section class="view is-active" id="view-home">
+      <div class="hero">
+        <p class="hero__greet" id="heroGreet">Hola 👋</p>
+        <h1 class="hero__title">¿Qué quieres cocinar hoy? 🍗</h1>
+
+        <div class="searchbar searchbar--hero">
+          <span class="searchbar__ico">🔍</span>
+          <input type="search" id="heroSearch" placeholder="Busca una receta, ingrediente o plato…"
+                 autocomplete="off" maxlength="60" aria-label="Buscar recetas">
+          <button class="searchbar__clear" id="heroSearchClear" hidden aria-label="Limpiar búsqueda">✕</button>
+        </div>
+
+        <div class="hero__stats" id="heroStats"></div>
+      </div>
+
+      <section class="section">
+        <div class="section__head">
+          <h2 class="section__title">Categorías</h2>
+          <button class="link-btn" data-nav="recipes">Ver todas →</button>
+        </div>
+        <div class="cats" id="catGrid"></div>
+      </section>
+
+      <div class="action-cards">
+        <button class="dice-card" id="diceBtn">
+          <span class="dice-card__emoji">🎲</span>
+          <span class="dice-card__body">
+            <b>NO SÉ QUÉ COCINAR</b>
+            <small>Deja que elijamos por ti, con tus filtros</small>
+          </span>
+          <span class="dice-card__arrow">→</span>
+        </button>
+        <button class="dice-card dice-card--alt" id="haveBtn">
+          <span class="dice-card__emoji">🧺</span>
+          <span class="dice-card__body">
+            <b>COCINA CON LO QUE TENGO</b>
+            <small>Marca tus ingredientes y te decimos qué sale</small>
+          </span>
+          <span class="dice-card__arrow">→</span>
+        </button>
+      </div>
+
+      <section class="section" id="recentSection" hidden>
+        <div class="section__head">
+          <h2 class="section__title">🍽️ Cocinadas recientemente</h2>
+          <button class="link-btn" data-nav="profile">Mi progreso →</button>
+        </div>
+        <div class="rail" id="recentRail"></div>
+      </section>
+
+      <section class="section">
+        <div class="section__head">
+          <h2 class="section__title">🔥 Más populares</h2>
+          <button class="link-btn" data-sort-nav="popular">Ver más →</button>
+        </div>
+        <div class="grid" id="popularGrid"></div>
+      </section>
+
+      <section class="section">
+        <div class="section__head">
+          <h2 class="section__title">⚡ Listas en menos de 20 min</h2>
+          <button class="link-btn" data-sort-nav="fast">Ver más →</button>
+        </div>
+        <div class="rail" id="fastRail"></div>
+      </section>
+
+      <section class="section">
+        <div class="section__head">
+          <h2 class="section__title">🥗 Ligeras y saludables</h2>
+          <button class="link-btn" data-tag-nav="saludable">Ver más →</button>
+        </div>
+        <div class="rail" id="healthyRail"></div>
+      </section>
+    </section>
+
+    <!-- ══════════ VISTA: RECETAS ══════════ -->
+    <section class="view" id="view-recipes">
+      <div class="view__head">
+        <h1 class="view__title">Recetas</h1>
+        <p class="view__sub" id="recipesCount">—</p>
+      </div>
+
+      <div class="searchbar">
+        <span class="searchbar__ico">🔍</span>
+        <input type="search" id="mainSearch" placeholder="Busca una receta, ingrediente o plato…"
+               autocomplete="off" maxlength="60" aria-label="Buscar recetas">
+        <button class="searchbar__clear" id="mainSearchClear" hidden aria-label="Limpiar búsqueda">✕</button>
+      </div>
+
+      <div class="chips" id="catChips"></div>
+
+      <div class="toolbar">
+        <button class="btn btn--ghost" id="filtersBtn">
+          <span>⚙️</span> Filtros <span class="badge" id="filtersBadge" hidden>0</span>
+        </button>
+        <div class="select-wrap">
+          <select id="sortSelect" aria-label="Ordenar recetas">
+            <option value="popular">🔥 Más populares</option>
+            <option value="fast">⚡ Más rápidas</option>
+            <option value="easy">😊 Más fáciles</option>
+            <option value="calories">🥗 Menos calorías</option>
+            <option value="recent">🆕 Más recientes</option>
+            <option value="rating">⭐ Mis mejor valoradas</option>
+            <option value="az">🔤 A — Z</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="active-filters" id="activeFilters"></div>
+      <div class="grid" id="recipesGrid"></div>
+    </section>
+
+    <!-- ══════════ VISTA: MI SEMANA ══════════ -->
+    <section class="view" id="view-week">
+      <div class="view__head">
+        <h1 class="view__title">📅 Mi semana</h1>
+        <p class="view__sub">Planifica tus comidas y genera la lista de la compra en un clic.</p>
+      </div>
+      <div class="row-actions">
+        <button class="btn btn--primary btn--wide" id="weekToShopping">🛒 Añadir la semana a la compra</button>
+        <button class="btn btn--ghost" id="weekBatch">🔥 Orden de cocinado</button>
+        <button class="btn btn--ghost" id="weekShare">📤 Compartir semana</button>
+        <button class="btn btn--ghost" id="weekSurprise">🎲 Rellenar al azar</button>
+        <button class="btn btn--danger-ghost" id="weekClear">🗑️ Vaciar semana</button>
+      </div>
+      <div class="batch" id="batchPlan" hidden></div>
+      <div class="week" id="weekGrid"></div>
+    </section>
+
+    <!-- ══════════ VISTA: LISTA DE COMPRA ══════════ -->
+    <section class="view" id="view-shopping">
+      <div class="view__head">
+        <h1 class="view__title">🛒 Lista de la compra</h1>
+        <p class="view__sub" id="shoppingSummary">—</p>
+      </div>
+
+      <form class="add-item" id="addItemForm" autocomplete="off">
+        <input type="text" id="addItemName" placeholder="Añadir producto…" maxlength="50" aria-label="Nombre del producto">
+        <input type="text" id="addItemQty" placeholder="Cantidad" maxlength="24" aria-label="Cantidad">
+        <button class="btn btn--primary" type="submit">＋ Añadir</button>
+      </form>
+
+      <div class="row-actions">
+        <button class="btn btn--ghost" id="shopShare">📤 Compartir</button>
+        <button class="btn btn--ghost" id="shopCopy">📋 Copiar lista</button>
+        <button class="btn btn--ghost" id="shopClearDone">✅ Quitar comprados</button>
+        <button class="btn btn--danger-ghost" id="shopClearAll">🗑️ Borrar todo</button>
+      </div>
+
+      <div id="shoppingList" class="shopping"></div>
+
+      <section class="section">
+        <div class="section__head">
+          <h2 class="section__title">🏠 Mi despensa</h2>
+          <span class="section__meta">Lo que ya tienes en casa no se añadirá a la lista</span>
+        </div>
+        <div class="searchbar searchbar--sm">
+          <span class="searchbar__ico">🔍</span>
+          <input type="search" id="pantrySearch" placeholder="Busca un producto para marcarlo…"
+                 autocomplete="off" maxlength="40" aria-label="Buscar producto de la despensa">
+          <button class="searchbar__clear" id="pantrySearchClear" hidden aria-label="Limpiar búsqueda">✕</button>
+        </div>
+        <div class="pantry" id="pantryList"></div>
+      </section>
+    </section>
+
+    <!-- ══════════ VISTA: FAVORITOS ══════════ -->
+    <section class="view" id="view-favorites">
+      <div class="view__head">
+        <h1 class="view__title">❤️ Favoritos</h1>
+        <p class="view__sub" id="favCount">—</p>
+      </div>
+      <div class="grid" id="favGrid"></div>
+    </section>
+
+    <!-- ══════════ VISTA: PERFIL / PROGRESO ══════════ -->
+    <section class="view" id="view-profile">
+      <div class="me" id="meCard"></div>
+
+      <div class="account" id="accountCard"></div>
+
+      <div class="stats" id="statsGrid"></div>
+
+      <section class="section">
+        <div class="section__head">
+          <h2 class="section__title">🏆 Logros</h2>
+          <span class="section__meta" id="achieveMeta"></span>
+        </div>
+        <div class="achievements" id="achievementsGrid"></div>
+      </section>
+
+      <section class="section">
+        <div class="section__head"><h2 class="section__title">🍽️ Cocinadas recientemente</h2></div>
+        <div id="historyList" class="history"></div>
+      </section>
+
+      <section class="section">
+        <div class="section__head"><h2 class="section__title">⚙️ Preferencias</h2></div>
+        <div class="prefs">
+          <div class="pref-row">
+            <div class="pref-row__txt"><b>Tema</b><small>Elige cómo se ve la aplicación</small></div>
+            <div class="seg" id="themeSeg">
+              <button data-theme-set="light">☀️ Claro</button>
+              <button data-theme-set="dark">🌙 Oscuro</button>
+            </div>
+          </div>
+          <div class="pref-row">
+            <div class="pref-row__txt"><b>Sonido del temporizador</b><small>Aviso sonoro al terminar la cuenta atrás</small></div>
+            <div class="seg" id="soundSeg">
+              <button data-sound-set="on">🔔 Sí</button>
+              <button data-sound-set="off">🔕 No</button>
+            </div>
+          </div>
+          <div class="pref-row">
+            <div class="pref-row__txt"><b>Avisarme aunque salga de la app</b><small>Notificación del sistema al terminar el temporizador</small></div>
+            <div class="seg" id="notifySeg">
+              <button data-notify-set="on">🔔 Sí</button>
+              <button data-notify-set="off">🔕 No</button>
+            </div>
+          </div>
+          <div class="pref-row">
+            <div class="pref-row__txt"><b>Leer los pasos en voz alta</b><small>Útil cuando tienes las manos ocupadas</small></div>
+            <div class="seg" id="voiceSeg">
+              <button data-voice-set="on">🔊 Sí</button>
+              <button data-voice-set="off">🔇 No</button>
+            </div>
+          </div>
+          <div class="pref-row">
+            <div class="pref-row__txt"><b>Ajuste de temperatura</b><small>Si tu air fryer calienta de más o de menos, corrige todas las recetas</small></div>
+            <div class="seg seg--wrap" id="tempSeg">
+              <button data-temp-set="-15">−15°</button>
+              <button data-temp-set="-10">−10°</button>
+              <button data-temp-set="-5">−5°</button>
+              <button data-temp-set="0">Normal</button>
+              <button data-temp-set="5">+5°</button>
+              <button data-temp-set="10">+10°</button>
+            </div>
+          </div>
+          <div class="pref-row">
+            <div class="pref-row__txt"><b>Instalar en el móvil</b><small>Añádela a la pantalla de inicio y úsala sin conexión</small></div>
+            <button class="btn btn--primary" id="installBtn">📲 Instalar app</button>
+          </div>
+          <div class="pref-row">
+            <div class="pref-row__txt"><b>Copia de seguridad</b><small>Guarda o restaura tus datos en un archivo</small></div>
+            <div class="pref-row__btns">
+              <button class="btn btn--ghost" id="exportData">⬇️ Exportar</button>
+              <button class="btn btn--ghost" id="importBtn">⬆️ Importar</button>
+              <input type="file" id="importFile" accept="application/json,.json"
+                     aria-label="Archivo de copia de seguridad" hidden>
+            </div>
+          </div>
+          <div class="pref-row">
+            <div class="pref-row__txt"><b>Créditos de las fotos</b><small>Autoría y licencia de cada imagen</small></div>
+            <button class="btn btn--ghost" id="creditsBtn">📷 Ver créditos</button>
+          </div>
+          <div class="pref-row">
+            <div class="pref-row__txt"><b>Borrar mis datos</b><small>Favoritos, historial, semana, lista, despensa y logros</small></div>
+            <button class="btn btn--danger-ghost" id="wipeData">🗑️ Borrar todo</button>
+          </div>
+        </div>
+      </section>
+    </section>
+
+  </main>
+
+  <!-- ══════════ BOTTOM NAV (móvil) ══════════ -->
+  <nav class="tabbar" aria-label="Navegación">
+    <button class="tabbar__btn is-active" data-nav="home" aria-label="Inicio"><span>🏠</span><small>Inicio</small></button>
+    <button class="tabbar__btn" data-nav="recipes" aria-label="Buscar recetas"><span>🔍</span><small>Buscar</small></button>
+    <button class="tabbar__btn" data-nav="week" aria-label="Mi semana"><span>📅</span><small>Semana</small></button>
+    <button class="tabbar__btn" data-nav="shopping" aria-label="Lista de compra"><span>🛒</span><small>Compra</small><i class="tabbar__dot" id="shopDot" hidden></i></button>
+    <button class="tabbar__btn" data-nav="favorites" aria-label="Favoritos"><span>❤️</span><small>Favoritos</small></button>
+    <button class="tabbar__btn" data-nav="profile" aria-label="Mi perfil"><span>🧑‍🍳</span><small>Perfil</small></button>
+  </nav>
+
+  <!-- ══════════ MODAL: RECETA ══════════ -->
+  <div class="sheet" id="recipeSheet" role="dialog" aria-modal="true" aria-label="Receta" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <article class="sheet__panel" id="recipePanel"></article>
+  </div>
+
+  <!-- ══════════ MODAL: FILTROS ══════════ -->
+  <div class="sheet sheet--side" id="filterSheet" role="dialog" aria-modal="true" aria-label="Filtros" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel sheet__panel--side">
+      <header class="sheet__head">
+        <h2>⚙️ Filtros</h2>
+        <button class="icon-btn" data-close-sheet aria-label="Cerrar">✕</button>
+      </header>
+      <div class="sheet__body" id="filterBody"></div>
+      <footer class="sheet__foot">
+        <button class="btn btn--ghost" id="filtersReset">Limpiar</button>
+        <button class="btn btn--primary" id="filtersApply">Ver recetas</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ══════════ MODAL: RECETA ALEATORIA ══════════ -->
+  <div class="sheet" id="diceSheet" role="dialog" aria-modal="true" aria-label="Receta aleatoria" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel sheet__panel--center">
+      <header class="sheet__head">
+        <h2>🎲 No sé qué cocinar</h2>
+        <button class="icon-btn" data-close-sheet aria-label="Cerrar">✕</button>
+      </header>
+      <div class="sheet__body" id="diceBody"></div>
+      <footer class="sheet__foot">
+        <button class="btn btn--ghost" data-close-sheet>Cancelar</button>
+        <button class="btn btn--primary" id="diceRoll">🎲 ¡Sorpréndeme!</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ══════════ MODAL: COCINA CON LO QUE TENGO ══════════ -->
+  <div class="sheet" id="haveSheet" role="dialog" aria-modal="true" aria-label="Cocina con lo que tengo" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel sheet__panel--center">
+      <header class="sheet__head">
+        <h2>🧺 ¿Qué tienes en casa?</h2>
+        <button class="icon-btn" data-close-sheet aria-label="Cerrar">✕</button>
+      </header>
+      <div class="sheet__body" id="haveBody"></div>
+      <footer class="sheet__foot">
+        <button class="btn btn--ghost" id="haveReset">Limpiar</button>
+        <button class="btn btn--primary" id="haveSearch">🔍 Ver qué puedo cocinar</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ══════════ MODAL: ELEGIR RECETA (semana) ══════════ -->
+  <div class="sheet" id="pickSheet" role="dialog" aria-modal="true" aria-label="Elegir receta" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel sheet__panel--side">
+      <header class="sheet__head">
+        <h2 id="pickTitle">Elegir receta</h2>
+        <button class="icon-btn" data-close-sheet aria-label="Cerrar">✕</button>
+      </header>
+      <div class="sheet__body">
+        <div class="searchbar">
+          <span class="searchbar__ico">🔍</span>
+          <input type="search" id="pickSearch" placeholder="Buscar receta…" maxlength="60" aria-label="Buscar receta">
+        </div>
+        <div class="picklist" id="pickList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ MODAL: CRÉDITOS DE LAS FOTOS ══════════ -->
+  <div class="sheet" id="creditsSheet" role="dialog" aria-modal="true" aria-label="Créditos de las fotos" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel sheet__panel--center">
+      <header class="sheet__head">
+        <h2>📷 Créditos de las fotos</h2>
+        <button class="icon-btn" data-close-sheet aria-label="Cerrar">✕</button>
+      </header>
+      <div class="sheet__body" id="creditsBody"></div>
+      <footer class="sheet__foot">
+        <button class="btn btn--primary btn--block" data-close-sheet>Cerrar</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ══════════ BIENVENIDA (solo la primera vez) ══════════ -->
+  <div class="welcome" id="welcome" hidden>
+    <div class="welcome__panel">
+      <div class="welcome__logo">🍗</div>
+      <h1 class="welcome__title">Bienvenido a <span>AirFryer</span></h1>
+      <p class="welcome__sub">250 recetas para tu freidora de aire, listas para cocinar.</p>
+
+      <ul class="welcome__points">
+        <li><span>📖</span> Recetas paso a paso, con temporizador y voz</li>
+        <li><span>📅</span> Planifica la semana y genera la lista de la compra</li>
+        <li><span>📶</span> Funciona sin conexión, también en la cocina</li>
+      </ul>
+
+      <div class="welcome__actions">
+        <button class="btn btn--primary btn--wide" id="welcomeSignup">Crear mi cuenta</button>
+        <button class="btn btn--ghost btn--wide" id="welcomeLogin">Ya tengo cuenta</button>
+        <button class="link-btn" id="welcomeSkip">Seguir sin cuenta</button>
+      </div>
+
+      <p class="welcome__note">Con cuenta tendrás tus recetas y tu progreso también en el móvil.
+        Sin cuenta funciona igual, pero solo en este dispositivo.</p>
+    </div>
+  </div>
+
+  <!-- ══════════ MODAL: TU PERFIL ══════════ -->
+  <div class="sheet" id="meSheet" role="dialog" aria-modal="true" aria-label="Tu perfil" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel sheet__panel--center">
+      <header class="sheet__head">
+        <h2>🧑‍🍳 Tu perfil</h2>
+        <button class="icon-btn" data-close-sheet aria-label="Cerrar">✕</button>
+      </header>
+      <div class="sheet__body" id="meBody"></div>
+      <footer class="sheet__foot">
+        <button class="btn btn--ghost" data-close-sheet>Cancelar</button>
+        <button class="btn btn--primary" id="meSave">Guardar</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ══════════ MODAL: CUENTA ══════════ -->
+  <div class="sheet" id="authSheet" role="dialog" aria-modal="true" aria-label="Tu cuenta" hidden>
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel sheet__panel--center">
+      <header class="sheet__head">
+        <h2 id="authTitle">☁️ Tu cuenta</h2>
+        <button class="icon-btn" data-close-sheet aria-label="Cerrar">✕</button>
+      </header>
+
+      <div class="sheet__body">
+        <div class="auth__hero">
+          <span class="auth__emoji">🍗</span>
+          <p class="auth__intro" id="authIntro">
+            Guarda tus recetas, tu semana y tu progreso en tu cuenta
+            y recupéralos en cualquier dispositivo.
+          </p>
+        </div>
+
+        <div class="seg auth__tabs" id="authTabs">
+          <button data-auth-tab="entrar" class="is-active">Entrar</button>
+          <button data-auth-tab="crear">Crear cuenta</button>
+        </div>
+
+        <form class="auth__form" id="authForm" autocomplete="on">
+          <label class="field">
+            <span>Email</span>
+            <input type="email" id="authEmail" required autocomplete="email"
+                   placeholder="tu@email.com" maxlength="120">
+          </label>
+
+          <label class="field" id="authPasswordField">
+            <span>Contraseña</span>
+            <input type="password" id="authPassword" autocomplete="current-password"
+                   placeholder="Mínimo 6 caracteres" minlength="6" maxlength="72">
+          </label>
+
+          <p class="auth__error" id="authError" hidden></p>
+          <p class="auth__ok" id="authOk" hidden></p>
+
+          <button class="btn btn--primary btn--block btn--big" type="submit" id="authSubmit">
+            Entrar
+          </button>
+        </form>
+
+        <div class="auth__alt">
+          <span>o</span>
+        </div>
+        <button class="btn btn--ghost btn--block" id="authMagic">
+          ✉️ Enviarme un enlace para entrar sin contraseña
+        </button>
+
+        <p class="auth__legal">
+          Tus datos se guardan en tu propio proyecto de Supabase. Nadie más puede verlos.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ MODO COCINAR ══════════ -->
+  <div class="cook" id="cookMode" role="dialog" aria-modal="true" aria-label="Modo cocinar" hidden></div>
+
+  <!-- ══════════ CONFIRMACIÓN ══════════ -->
+  <div class="confirm" id="confirmBox" role="dialog" aria-modal="true" hidden>
+    <div class="sheet__backdrop" data-confirm-no></div>
+    <div class="confirm__panel">
+      <div class="confirm__ico" id="confirmIco">⚠️</div>
+      <h3 id="confirmTitle">¿Seguro?</h3>
+      <p id="confirmText"></p>
+      <div class="confirm__actions">
+        <button class="btn btn--ghost" data-confirm-no>Cancelar</button>
+        <button class="btn btn--danger" id="confirmYes">Sí, continuar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ DIÁLOGO DE VARIAS OPCIONES ══════════
+       Para decisiones que no son un sí/no. Cerrarlo (fondo, ✕, Escape o
+       Cancelar) NUNCA ejecuta ninguna acción. -->
+  <div class="confirm" id="choiceBox" role="dialog" aria-modal="true" hidden>
+    <div class="sheet__backdrop" data-choice-cancel></div>
+    <div class="confirm__panel">
+      <div class="confirm__ico" id="choiceIco">🔀</div>
+      <h3 id="choiceTitle"></h3>
+      <p id="choiceText"></p>
+      <div class="confirm__actions confirm__actions--stack" id="choiceActions"></div>
+      <button class="btn btn--ghost btn--wide" data-choice-cancel id="choiceCancel">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- ══════════ TOASTS ══════════ -->
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <!-- Librería de Supabase: opcional. Si no carga (sin conexión o sin
+       configurar), la app sigue funcionando en local sin enterarse. -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" defer></script>
+
+  <!-- Guardián: si a los 8 segundos la aplicación sigue en la pantalla de
+       carga, algo ha fallado antes incluso de que app.js pudiera reaccionar
+       (un script que no carga, por ejemplo). Se muestra la salida de rescate. -->
+  <script>
+    window.__airfryerGuard = setTimeout(function () {
+      var splash = document.getElementById('splash');
+      var rescue = document.getElementById('rescue');
+      if (!splash || !rescue || !rescue.hidden) return;
+      splash.remove();
+      document.body.classList.remove('no-scroll');
+      var txt = document.getElementById('rescueText');
+      if (txt) txt.textContent = 'La aplicación ha tardado demasiado en abrirse. ' +
+        'Puede ser un problema de conexión o algún dato guardado en mal estado.';
+      rescue.hidden = false;
+      document.getElementById('rescueReload').onclick = function () { location.reload(); };
+      document.getElementById('rescueRepair').onclick = function () {
+        try {
+          Object.keys(localStorage).filter(function (k) { return k.indexOf('airfryer:') === 0; })
+            .forEach(function (k) { localStorage.removeItem(k); });
+        } catch (e) {}
+        location.reload();
+      };
+    }, 8000);
+  </script>
+
+  <script src="js/recipes.js"></script>
+  <script src="js/photo-credits.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/cloud.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
