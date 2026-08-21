@@ -264,6 +264,86 @@ cambiar las cinco referencias de `index.html` y regenerar los iconos a mano.
 
 ---
 
+## ✨ Movimiento e interacción
+
+- **Los `:hover` van dentro de `@media (hover: hover)`.** Sin eso, en el móvil
+  el efecto se quedaba **pegado** tras tocar (una tarjeta se elevaba y ya no
+  bajaba). Si se añade una regla `:hover` nueva, hay que envolverla igual.
+- **El dedo necesita su propia respuesta.** Había 37 reglas `:hover` y solo 4
+  `:active`, así que en el móvil casi nada acusaba el toque y la aplicación
+  parecía lenta aunque respondiera al instante. Hay un bloque «respuesta al
+  toque» con `:active` para todo lo pulsable.
+- **`-webkit-tap-highlight-color: transparent`**: el recuadro gris del navegador
+  chocaba con las esquinas redondeadas.
+- **`overscroll-behavior: contain`** en paneles y carruseles: al llegar al final
+  de una lista, el gesto arrastraba la página de detrás.
+- **`scroll-padding-top`**: la barra superior es fija y tapaba el título de la
+  sección al saltar a ella desde los datos del perfil.
+- **Entrada escalonada**: cada tarjeta lleva `style="--i:N"` y retrasa su
+  aparición 35 ms. El índice se limita a 11 para que una lista de 250 no tarde
+  nueve segundos en terminar de entrar (tope real: 0,385 s).
+- **Marca deslizante en la barra inferior**: es el `::before` de `.tabbar`,
+  movido con las variables `--tab` (índice activo) y `--tabs` (cuántas hay),
+  que pone `navigate()`.
+- **Las vistas entran por el lado del que vienen** (`data-dir="avanza|vuelve"`),
+  comparando la posición en `VIEWS`. Hay que quitar y volver a poner el
+  atributo (`void v.offsetWidth`) o la animación no se reinicia.
+
+Todo esto lo sigue anulando el bloque `prefers-reduced-motion` que ya existía.
+
+---
+
+## ☁️ La nube es la única fuente de datos
+
+Hasta aquí convivían dos almacenes —el navegador y la nube— y por eso aparecía
+un diálogo preguntando con cuál quedarse. Ya no: **los datos de la cuenta no se
+guardan en el navegador**.
+
+| Dónde vive | Qué |
+|---|---|
+| **Nube** (Supabase) | Favoritos, historial, semana, compra, despensa, notas, logros, ingredientes marcados y perfil (nombre y avatar) |
+| **Memoria** | Copia de trabajo mientras la aplicación está abierta. Se llena al entrar y se sube al cambiar |
+| **Navegador** | Solo los ajustes de este aparato: tema, sonido, voz, avisos y corrección de temperatura. Y `airfryer:visto`, una marca para el texto de bienvenida |
+
+En `storage.js` esto lo deciden `CLAVES_DE_CUENTA` y `PREFS_DE_CUENTA`. Detalles
+que costó afinar y conviene no deshacer:
+
+- **Los ajustes del aparato NO viajan a la nube** (`soloPerfil()` en `exportAll`).
+  Si viajaran, el móvil le cambiaría el tema al ordenador.
+- **Al escribir preferencias se fusiona con lo que ya había** en el navegador:
+  cuando llegan datos de la nube no vienen los ajustes del aparato, y sin la
+  fusión se borrarían el tema y la corrección de temperatura.
+- **La caché guarda las dos mitades juntas.** Si solo guardara lo recién
+  llegado, una bajada de la nube dejaría la aplicación sin tema hasta recargar.
+- Al arrancar se **limpian** las claves de cuenta que dejaran versiones
+  anteriores en el navegador.
+- `syncBase` (la base para fusionar entre dispositivos) vive **en memoria**: no
+  tiene sentido guardarla si los datos tampoco se guardan.
+
+### Decir la verdad sobre el estado de los datos
+
+Al pasar a la nube apareció un efecto feo: durante la carga la aplicación decía
+«Aún no tienes favoritos» y luego se llenaba de golpe. Ahora hay **cuatro
+estados** y cada vista los distingue con `bloqueDeEstado()`:
+
+| Estado | Qué se ve |
+|---|---|
+| Cargando | «Trayendo tus favoritos…» con esqueletos |
+| Error | «No hemos podido traer tus datos» + botón *Reintentar* |
+| Vacío de verdad | «Aún no tienes favoritos» |
+| Con datos | La lista |
+
+Además: **reintentos automáticos** al fallar una subida (3 s, 8 s, 20 s, 60 s),
+que se adelantan al recuperar la conexión; y una **barra de estado** abajo
+(`.netbar`) que avisa de que no hay red. Va abajo a propósito: arriba tapaba la
+cabecera.
+
+**Consecuencia asumida**: sin conexión la aplicación no muestra los datos de la
+cuenta. Las 250 recetas sí, porque van en el código. Es el precio de tener una
+sola fórmula, y fue una decisión explícita.
+
+---
+
 ## 🚪 Entrada a la aplicación
 
 Al abrir se comprueba **primero** si hay sesión, y se decide sin esperar a la
@@ -276,10 +356,8 @@ localStorage):
   texto cambia a «Entra en AirChef» y el botón principal pasa a ser *Entrar*.
 - **Rastro de sesión pero inválida** (caducada o cerrada desde otro sitio):
   `Cloud.init()` lo detecta y entonces sí se pide entrar.
-- **«Seguir sin cuenta»** sigue existiendo para no dejar a nadie fuera sin
-  conexión, pero solo vale mientras la aplicación siga abierta
-  (`sessionStorage`, clave `airfryer:sinCuentaEstaSesion`). Al cerrarla y
-  volver, se pide entrar otra vez.
+- **No hay forma de entrar sin cuenta**: los datos viven en la nube, así que
+  sin sesión no habría nada que enseñar.
 - El formulario se abre **por encima** de la pantalla de entrada
   (`.sheet--sobre-bienvenida`, z-index 125 contra 120). Si se cancela, se
   vuelve a ella; no se cuela nadie en la aplicación sin haber decidido.
@@ -376,7 +454,7 @@ confirmada; solo falla el destino).
 ```
 
 O doble clic en `subir.bat`. Sube `CACHE_VERSION` de `sw.js` automáticamente,
-hace commit y push. Va por `airchef-v1`.
+hace commit y push. Va por `airchef-v3`.
 
 El repositorio local está iniciado pero **sin commit inicial ni remoto**: falta
 configurar la identidad de git y crear el repositorio en GitHub (pasos en el

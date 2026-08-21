@@ -384,10 +384,34 @@ function retrocederConsumiendo() {
 
 function navigate(view, { scroll = true, keepHash = false, desdeHistorial = false, replace = false } = {}) {
   if (!VIEWS.includes(view)) view = 'home';
+
+  /* ¿Se avanza o se retrocede? Se compara la posición en la barra para que
+     la pantalla entre por el lado correcto. */
+  const antes = VIEWS.indexOf(state.view);
+  const ahora = VIEWS.indexOf(view);
+  const direccion = antes === ahora ? '' : (ahora > antes ? 'avanza' : 'vuelve');
   state.view = view;
 
-  $$('.view').forEach(v => v.classList.toggle('is-active', v.id === 'view-' + view));
+  $$('.view').forEach(v => {
+    const activa = v.id === 'view-' + view;
+    if (activa && direccion) {
+      /* Se quita y se vuelve a poner para que la animación se reinicie */
+      v.removeAttribute('data-dir');
+      void v.offsetWidth;
+      v.setAttribute('data-dir', direccion);
+    }
+    v.classList.toggle('is-active', activa);
+  });
   $$('[data-nav]').forEach(b => b.classList.toggle('is-active', b.dataset.nav === view));
+
+  /* La marca de la barra inferior se desliza hasta la pestaña elegida */
+  const barra = $('.tabbar');
+  if (barra) {
+    const pestanas = $$('.tabbar__btn');
+    const i = pestanas.findIndex(b => b.dataset.nav === view);
+    barra.style.setProperty('--tabs', pestanas.length);
+    if (i >= 0) barra.style.setProperty('--tab', i);
+  }
 
   /* Si el hash lleva el token de confirmación, no se toca hasta que Supabase
      lo haya leído: si no, se pierde la sesión recién creada. */
@@ -468,11 +492,14 @@ function photoCredit(id) {
     : `<span class="photo__credit">${esc(texto)}</span>`;
 }
 
-function recipeCard(recipe, variant = '') {
+function recipeCard(recipe, variant = '', indice = 0) {
   const fav = Store.favorites.has(recipe.id);
   const note = Store.notes.get(recipe.id);
+  /* El índice escalona la entrada; se limita para que una lista larga no
+     tarde una eternidad en terminar de aparecer. */
+  const retardo = Math.min(indice, 11);
   return `
-  <article class="card ${variant}" data-recipe="${recipe.id}" data-cat="${recipe.category}" tabindex="0" role="button" aria-label="${esc(recipe.name)}">
+  <article class="card ${variant}" style="--i:${retardo}" data-recipe="${recipe.id}" data-cat="${recipe.category}" tabindex="0" role="button" aria-label="${esc(recipe.name)}">
     <div class="card__art">
       <span class="card__emoji">${recipe.emoji}</span>
       ${recipePhoto(recipe)}
@@ -494,6 +521,52 @@ function recipeCard(recipe, variant = '') {
       </div>
     </div>
   </article>`;
+}
+
+/**
+ * ¿En qué punto están los datos de la cuenta?
+ *
+ * Importa porque ahora viven en la nube: hasta que llegan, la aplicación no
+ * puede afirmar que no tienes favoritos. Antes decía "Aún no tienes
+ * favoritos" durante la carga y luego se llenaba de golpe.
+ */
+function estadoDeDatos() {
+  const s = Cloud.estado();
+  if (!s.configurado || s.estado === 'desactivado') return 'listo';
+  if (s.cargando) return 'cargando';
+  if (s.errorAlCargar) return 'error';
+  return 'listo';
+}
+
+/** Bloque de espera mientras llegan los datos, con la forma de lo que vendrá. */
+function cargandoState(icon = '☁️', texto = 'Trayendo tus datos…') {
+  return `
+  <div class="empty empty--cargando">
+    <div class="empty__ico">${icon}</div>
+    <h3>${esc(texto)}</h3>
+    <div class="sk sk--line"></div>
+    <div class="sk sk--line sk--short"></div>
+  </div>`;
+}
+
+/** Aviso cuando los datos no han podido llegar, con salida. */
+function errorState() {
+  const s = Cloud.estado();
+  return `
+  <div class="empty">
+    <div class="empty__ico">📡</div>
+    <h3>No hemos podido traer tus datos</h3>
+    <p>${esc(s.errorAlCargar || 'Comprueba tu conexión e inténtalo otra vez.')}</p>
+    <button class="btn btn--primary" id="reintentarCarga">Reintentar</button>
+  </div>`;
+}
+
+/** Devuelve el HTML de espera/error, o null si los datos ya están. */
+function bloqueDeEstado(icon, texto) {
+  const e = estadoDeDatos();
+  if (e === 'cargando') return cargandoState(icon, texto);
+  if (e === 'error') return errorState();
+  return null;
 }
 
 function emptyState(icon, title, text, actionLabel = '', actionAttr = '') {
@@ -550,12 +623,12 @@ function renderHome() {
     ${streak > 0 ? `<span class="pill pill--hot">🔥 Racha de ${streak} ${streak === 1 ? 'día' : 'días'}</span>` : ''}
   `;
 
-  $('#catGrid').innerHTML = HOME_CATS.map(c => {
+  $('#catGrid').innerHTML = HOME_CATS.map((c, i) => {
     const count = c.type === 'cat'
       ? RECIPES.filter(r => r.category === c.key).length
       : RECIPES.filter(r => r.tags.includes(c.key)).length;
     return `
-      <button class="cat" data-cat-nav="${c.key}" data-cat-type="${c.type}" data-cat="${c.key}">
+      <button class="cat" style="--i:${i}" data-cat-nav="${c.key}" data-cat-type="${c.type}" data-cat="${c.key}">
         <span class="cat__emoji">${c.emoji}</span>
         <span class="cat__label">${esc(c.label)}</span>
         <span class="cat__count">${count}</span>
@@ -563,17 +636,17 @@ function renderHome() {
   }).join('');
 
   const popular = [...RECIPES].sort((a, b) => b.popularity - a.popularity).slice(0, 8);
-  $('#popularGrid').innerHTML = popular.map(r => recipeCard(r)).join('');
+  $('#popularGrid').innerHTML = popular.map((r, i) => recipeCard(r, '', i)).join('');
 
   const fast = RECIPES.filter(r => totalTime(r) <= 20).sort((a, b) => totalTime(a) - totalTime(b)).slice(0, 12);
-  $('#fastRail').innerHTML = fast.map(r => recipeCard(r, 'card--rail')).join('');
+  $('#fastRail').innerHTML = fast.map((r, i) => recipeCard(r, 'card--rail', i)).join('');
 
   const healthy = RECIPES.filter(r => r.tags.includes('saludable')).sort((a, b) => a.calories - b.calories).slice(0, 12);
-  $('#healthyRail').innerHTML = healthy.map(r => recipeCard(r, 'card--rail')).join('');
+  $('#healthyRail').innerHTML = healthy.map((r, i) => recipeCard(r, 'card--rail', i)).join('');
 
   const recent = Store.history.recent(12).map(h => getRecipe(h.id)).filter(Boolean);
   $('#recentSection').hidden = recent.length === 0;
-  $('#recentRail').innerHTML = recent.map(r => recipeCard(r, 'card--rail')).join('');
+  $('#recentRail').innerHTML = recent.map((r, i) => recipeCard(r, 'card--rail', i)).join('');
 }
 
 /** Aplica búsqueda + filtros + orden. */
@@ -651,7 +724,7 @@ function renderRecipes() {
     : `${list.length} ${list.length === 1 ? 'receta' : 'recetas'}${state.query ? ` para “${state.query}”` : ''}`;
 
   if (list.length) {
-    $('#recipesGrid').innerHTML = list.map(r => recipeCard(r)).join('');
+    $('#recipesGrid').innerHTML = list.map((r, i) => recipeCard(r, '', i)).join('');
     return;
   }
 
@@ -668,12 +741,14 @@ function renderRecipes() {
 }
 
 function renderFavorites() {
+  const espera = bloqueDeEstado('❤️', 'Trayendo tus favoritos…');
+  if (espera) { $('#favCount').textContent = ''; $('#favGrid').innerHTML = espera; return; }
   const list = Store.favorites.all().map(getRecipe).filter(Boolean);
   $('#favCount').textContent = list.length
     ? `${list.length} ${list.length === 1 ? 'receta guardada' : 'recetas guardadas'}`
     : 'Todavía no has guardado ninguna receta';
   $('#favGrid').innerHTML = list.length
-    ? list.map(r => recipeCard(r)).join('')
+    ? list.map((r, i) => recipeCard(r, '', i)).join('')
     : emptyState('🤍', 'Aún no tienes favoritos', 'Pulsa el corazón de cualquier receta para guardarla aquí.', 'Explorar recetas', 'data-nav="recipes"');
 }
 
@@ -1242,6 +1317,8 @@ function finishCooking() {
 /* ══════════════ 9. MI SEMANA ══════════════ */
 
 function renderWeek() {
+  const espera = bloqueDeEstado('📅', 'Trayendo tu semana…');
+  if (espera) { $('#weekGrid').innerHTML = espera; return; }
   const data = Store.week.all();
   $('#weekGrid').innerHTML = DAYS.map(day => {
     const slots = data[day.key] || {};
@@ -1415,6 +1492,8 @@ function addRecipeToShopping(id, servingsOverride = null) {
 }
 
 function renderShopping() {
+  const espera = bloqueDeEstado('🛒', 'Trayendo tu lista…');
+  if (espera) { $('#shoppingSummary').textContent = ''; $('#shoppingList').innerHTML = espera; return; }
   const items = Store.shopping.all();
   const pending = items.filter(i => !i.done);
   const done = items.filter(i => i.done);
@@ -1640,6 +1719,15 @@ function checkAchievements() {
 
 function renderProfile() {
   renderMeCard();
+  const espera = bloqueDeEstado('🏆', 'Trayendo tu progreso…');
+  if (espera) {
+    $('#statsGrid').innerHTML = espera;
+    $('#achievementsGrid').innerHTML = '';
+    $('#historyList').innerHTML = '';
+    $('#achieveMeta').textContent = '';
+    renderAccount();
+    return;
+  }
   const s = progressStats();
   /* Cada dato lleva a la lista que hay detrás: ver el número sin poder abrirlo
      dejaba al usuario con la pregunta de "¿y cuáles son?". */
@@ -2298,13 +2386,6 @@ function bindEvents() {
     }
 
     /* — Bienvenida — */
-    if (e.target.closest('#welcomeSkip')) {
-      /* Elección voluntaria de usar la aplicación sin cuenta: se respeta
-         mientras no cierre la aplicación. */
-      try { sessionStorage.setItem(SIN_CUENTA, '1'); } catch (err) {}
-      cerrarBienvenida();
-      return;
-    }
     /* El formulario se abre ENCIMA de la pantalla de entrada. Si se cancela,
        se vuelve a ella en lugar de colarse en la aplicación sin haber entrado. */
     if (e.target.closest('#welcomeSignup')) {
@@ -2315,6 +2396,12 @@ function bindEvents() {
     }
     if (e.target.closest('#welcomeLogin')) {
       openAuth({ sobreBienvenida: true });
+      return;
+    }
+
+    /* — Reintentar la carga de datos — */
+    if (e.target.closest('#reintentarCarga')) {
+      Cloud.recargarDatos();
       return;
     }
 
@@ -2557,8 +2644,7 @@ function bindEvents() {
       await Cloud.salir();
       toast('Sesión cerrada', '👋');
       refrescarTodo();
-      /* Sin sesión, lo primero vuelve a ser la pantalla de entrada */
-      try { sessionStorage.removeItem(SIN_CUENTA); } catch (err) {}
+      /* Sin sesión no hay datos que mostrar: vuelta a la pantalla de entrada */
       mostrarBienvenida();
       return;
     }
@@ -2594,8 +2680,8 @@ function bindEvents() {
     /* Ya hay sesión: la pantalla de entrada deja de tener sentido */
     ocultarBienvenida();
     toast(authModo === 'entrar' ? '¡Hola de nuevo!' : '¡Cuenta creada!', '☁️');
-    if (res.conflicto) await resolverConflicto(res.conflicto);
-    else refrescarTodo();
+    if (res.datos && !res.datos.ok) toast(res.datos.error || 'No se han podido traer tus datos', '⚠️');
+    refrescarTodo();
     navigate('home', { replace: true });
   });
 
@@ -2848,6 +2934,23 @@ function bindEvents() {
     if (document.visibilityState === 'visible' && !$('#cookMode').hidden) requestWakeLock();
   });
 
+  /* Estado de la conexión: sin ella, los cambios no llegan a la cuenta */
+  const pintarConexion = () => {
+    const barra = $('#avisoConexion');
+    if (!barra) return;
+    const s = Cloud.estado();
+    const fuera = !navigator.onLine;
+    barra.hidden = !(fuera || (s.sinGuardar && s.estado === 'conectado'));
+    if (barra.hidden) return;
+    barra.textContent = fuera
+      ? '📴 Sin conexión · tus cambios se guardarán al volver'
+      : '⏳ Guardando tus cambios…';
+    barra.classList.toggle('is-error', fuera);
+  };
+  window.addEventListener('online', pintarConexion);
+  window.addEventListener('offline', pintarConexion);
+  Cloud.alCambiar(pintarConexion);
+
   /* El navegador ha rechazado guardar (almacenamiento lleno o bloqueado).
      Se avisa una sola vez para no atosigar. */
   let avisadoAlmacenamiento = false;
@@ -2880,28 +2983,19 @@ function hayIndicioDeSesion() {
   } catch (e) { return false; }
 }
 
-/** ¿Es la primera vez que se abre? Se decide sin consultar a la nube. */
+/** ¿Es la primera vez que se abre en este navegador? Solo cambia el texto. */
 function esPrimerUso() {
-  return !Store.prefs.get('welcomed') && !Store.hasData() && !hayIndicioDeSesion();
+  try { return !localStorage.getItem('airfryer:visto'); } catch (e) { return true; }
 }
 
-/* Quien elige entrar sin cuenta no vuelve a ver la pantalla mientras siga
-   con la aplicación abierta. Al cerrarla y volver, se le pregunta otra vez. */
-const SIN_CUENTA = 'airfryer:sinCuentaEstaSesion';
-const eligioSinCuenta = () => {
-  try { return !!sessionStorage.getItem(SIN_CUENTA); } catch (e) { return false; }
-};
-
 /**
- * Primero se mira si hay sesión: si la hay se va directo al inicio, y si no,
- * lo primero que se ve es la pantalla de entrada.
- * Todo se decide sin esperar a la red, mirando si Supabase tiene una sesión
- * guardada en este navegador.
+ * Hace falta sesión para usar la aplicación: los datos viven en la nube y
+ * en el navegador no se guarda nada. Se decide sin esperar a la red,
+ * mirando si Supabase tiene una sesión guardada aquí.
  */
 function hayQuePedirEntrar() {
   if (!Cloud.configurado()) return false;   // sin cuenta configurada no aplica
-  if (hayIndicioDeSesion()) return false;   // ya está dentro: al inicio
-  return !eligioSinCuenta();
+  return !hayIndicioDeSesion();
 }
 
 function mostrarBienvenida() {
@@ -2913,7 +3007,6 @@ function mostrarBienvenida() {
   if (!Cloud.configurado()) {
     $('#welcomeSignup').hidden = true;
     $('#welcomeLogin').hidden = true;
-    $('#welcomeSkip').textContent = 'Empezar a cocinar →';
   }
 
   /* Quien ya ha usado la aplicación no necesita que le den la bienvenida
@@ -2939,21 +3032,19 @@ function mostrarBienvenida() {
   setTimeout(mostrar, 80);
 }
 
-function cerrarBienvenida() {
-  const el = $('#welcome');
-  if (!el || el.hidden) return;
-  Store.prefs.set('welcomed', true);
-  el.classList.remove('is-in');
-  setTimeout(() => { el.hidden = true; }, 320);
-}
-
 /** Retirada inmediata, sin animación: se usa cuando resulta que sí hay sesión. */
 function ocultarBienvenida() {
   const el = $('#welcome');
   if (!el || el.hidden) return;
   el.classList.remove('is-in');
   el.hidden = true;
-  Store.prefs.set('welcomed', true);
+  marcarVisitado();
+}
+
+/* Solo sirve para saber si enseñar el texto de bienvenida o el de "entra".
+   No es un dato de la cuenta, así que este sí vive en el navegador. */
+function marcarVisitado() {
+  try { localStorage.setItem('airfryer:visto', '1'); } catch (e) {}
 }
 
 /* ══════════════ TU PERFIL: NOMBRE Y AVATAR ══════════════ */
@@ -3072,11 +3163,12 @@ function saveMeSheet() {
  * está pasando.
  */
 function estadoSync(s) {
-  if (!navigator.onLine) return '📴 Sin conexión · se guardará al volver';
+  if (s.cargando) return '⏳ Trayendo tus datos…';
+  if (s.errorAlCargar) return '⚠️ ' + s.errorAlCargar;
+  if (!navigator.onLine) return '📴 Sin conexión · los cambios no se están guardando';
   if (s.subiendo) return '⏳ Guardando…';
-  if (s.conflictoPendiente) return '⚠️ Hay que decidir qué copia conservar';
   if (s.ultimaSync) return '✅ Guardado ' + formatDate(s.ultimaSync).toLowerCase();
-  return '✅ Tus datos se guardan solos';
+  return '✅ Tus datos se guardan solos en tu cuenta';
 }
 
 function renderAccount() {
@@ -3171,46 +3263,6 @@ function authCargando(cargando, texto = '') {
   btn.disabled = cargando;
   btn.textContent = cargando ? (texto || 'Un momento…')
     : (authModo === 'entrar' ? 'Entrar' : 'Crear mi cuenta');
-}
-
-/**
- * Cuando hay datos en el dispositivo y en la nube, decide el usuario.
- * Las dos opciones son destructivas, así que ninguna puede ser la de por
- * defecto: cerrar el diálogo deja las dos copias intactas.
- */
-async function resolverConflicto(info) {
-  const cuando = (t) => t ? formatDate(t).toLowerCase() : 'fecha desconocida';
-  const masNuevo = info.nubeFecha > info.localFecha ? 'en tu cuenta' : 'en este dispositivo';
-
-  const eleccion = await chooseAction({
-    title: '¿Qué datos conservamos?',
-    icon: '🔀',
-    text: `Hay datos guardados en los dos sitios y solo puede quedar uno.\n` +
-          `· En tu cuenta: ${cuando(info.nubeFecha)}\n` +
-          `· En este dispositivo: ${cuando(info.localFecha)}\n` +
-          `Los más recientes están ${masNuevo}.`,
-    options: [
-      { key: 'bajar', label: '⬇️ Quedarme con los de mi cuenta' },
-      { key: 'subir', label: '⬆️ Quedarme con los de este dispositivo', tone: 'ghost' }
-    ],
-    cancel: 'Ahora no (no cambiar nada)'
-  });
-
-  if (eleccion === 'bajar') {
-    const res = await Cloud.bajar();
-    if (res.ok) { refrescarTodo(); toast('Datos recuperados de tu cuenta', '☁️'); }
-    else toast(res.error || 'No se han podido traer los datos', '⚠️');
-    return;
-  }
-  if (eleccion === 'subir') {
-    /* El usuario ha pedido que su versión sustituya a la de la nube */
-    const res = await Cloud.subir({ forzar: true });
-    toast(res.ok ? 'Se han subido los datos de este dispositivo' : (res.error || 'No se han podido subir'),
-          res.ok ? '☁️' : '⚠️');
-    return;
-  }
-  /* Sin elección: no se toca nada, ni aquí ni en la nube */
-  toast('No se ha cambiado nada. Puedes decidirlo desde tu perfil', 'ℹ️');
 }
 
 /** Repinta la vista actual tras un cambio grande de datos. */
@@ -3338,17 +3390,12 @@ function init() {
   registerServiceWorker();
 
   /* Cuenta en la nube: opcional. Si no hay claves, no hace nada. */
-  /* Un conflicto detectado al arrancar deja la subida automática en pausa:
-     hay que preguntar, o el usuario se quedaría sin sincronizar sin saberlo. */
-  let resolviendoConflicto = false;
-  Cloud.alCambiar(() => {
+  /* Cuando terminan de llegar los datos de la cuenta, se repinta */
+  let cargandoAntes = false;
+  Cloud.alCambiar((s) => {
     if (state.view === 'profile') renderAccount();
-    const info = Cloud.conflictoInicial && Cloud.conflictoInicial();
-    if (info && !resolviendoConflicto) {
-      resolviendoConflicto = true;
-      Cloud.olvidarConflictoInicial();
-      Promise.resolve(resolverConflicto(info)).finally(() => { resolviendoConflicto = false; });
-    }
+    if (cargandoAntes && !s.cargando) refrescarTodo();
+    cargandoAntes = s.cargando;
   });
   Cloud.init().then(() => {
     const s = Cloud.estado();

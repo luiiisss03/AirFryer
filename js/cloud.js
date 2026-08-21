@@ -24,12 +24,11 @@ const Cloud = (() => {
   let estado = 'desactivado';    // desactivado | sin-sesion | conectado | error
   let ultimaSync = null;
   let subiendo = false;
-  /* Si hay un conflicto que el usuario no ha resuelto, la subida automática
-     queda en pausa: si no, a los pocos segundos machacaría la copia de la
-     nube que precisamente estaba dudando si conservar. */
-  let conflictoSinResolver = false;
-  /* Conflicto detectado al arrancar con sesión, a la espera de que el usuario decida */
-  let conflictoInicial = null;
+  /* Mientras se traen los datos de la cuenta no hay nada que enseñar todavía */
+  let cargando = false;
+  let errorAlCargar = null;
+  /* Cambios hechos que todavía no han llegado a la nube */
+  let sinGuardar = false;
   let temporizador = null;
   const oyentes = [];
 
@@ -51,7 +50,10 @@ const Cloud = (() => {
     email: user ? user.email : null,
     ultimaSync,
     subiendo,
-    conflictoPendiente: conflictoSinResolver
+    cargando,
+    errorAlCargar,
+    sinGuardar,
+    enLinea: typeof navigator === 'undefined' ? true : navigator.onLine
   });
 
   /** Traduce los errores de Supabase a algo legible en español. */
@@ -81,9 +83,10 @@ const Cloud = (() => {
     if (!u || !u.id) return false;
     const anterior = Store.lastUser.get();
     if (anterior && anterior !== u.id) {
+      /* Por si quedara algo en memoria de la sesión anterior */
       Store.wipeUserData();
       Store.lastUser.set(u.id);
-      console.info('[cuenta] este dispositivo era de otra sesión: se han vaciado los datos locales');
+      console.info('[cuenta] ha entrado otro usuario: memoria vaciada');
       return true;
     }
     Store.lastUser.set(u.id);
@@ -125,7 +128,10 @@ const Cloud = (() => {
          preguntar. Si no, la subida automática quedaría en pausa sin que el
          usuario supiera por qué sus cambios dejan de guardarse. */
       if (user) {
-        sincronizarAlEntrar().then(c => { if (c) { conflictoInicial = c; avisar(); } });
+        cargando = true; avisar();
+        sincronizarAlEntrar()
+          .then(r => { if (!r.ok) errorAlCargar = r.error; })
+          .finally(() => { cargando = false; avisar(); });
       }
       escucharCambios();
     } catch (e) {
@@ -135,14 +141,18 @@ const Cloud = (() => {
     }
   }
 
-  /* Sube los cambios locales pasados unos segundos desde el último */
   /* Un cambio llegado mientras se estaba subiendo. Antes se descartaba y no
      se volvía a intentar, así que ese cambio no llegaba a la nube hasta el
      siguiente. Ahora se recuerda y se sube al terminar. */
   let subidaPendiente = false;
 
+  /* Reintentos cuando la subida falla. Sin esto, marcar un favorito con mala
+     cobertura se perdía en silencio: el usuario creía haberlo guardado. */
+  const ESPERAS = [3000, 8000, 20000, 60000];
+  let intentoFallido = 0;
+
   function programarSubida(retardo = RETARDO_SUBIDA) {
-    if (!user || conflictoSinResolver) return;
+    if (!user) return;
     if (subiendo) { subidaPendiente = true; return; }
     clearTimeout(temporizador);
     temporizador = setTimeout(() => {
@@ -151,22 +161,37 @@ const Cloud = (() => {
     }, retardo);
   }
 
+  /** Tras un intento fallido, se vuelve a probar cada vez más espaciado. */
+  function reintentarMasTarde() {
+    const espera = ESPERAS[Math.min(intentoFallido, ESPERAS.length - 1)];
+    intentoFallido++;
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => { temporizador = null; subir().catch(() => {}); }, espera);
+  }
+
   function escucharCambios() {
-    window.addEventListener('airfryer:datachange', () => programarSubida());
+    window.addEventListener('airfryer:datachange', () => { sinGuardar = true; avisar(); programarSubida(); });
+
+    /* Al recuperar la conexión, no esperar al siguiente reintento */
+    window.addEventListener('online', () => {
+      avisar();
+      if (user && sinGuardar) programarSubida(400);
+    });
+    window.addEventListener('offline', avisar);
 
     /* Guardar al salir: `visibilitychange` salta antes que `pagehide` y la
        página todavía está viva, así que la petición llega a tiempo. En
        `pagehide` muchas veces ya no daba tiempo. */
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'hidden') return;
-      if (user && temporizador && !conflictoSinResolver) {
+      if (user && temporizador) {
         clearTimeout(temporizador);
         temporizador = null;
         subir().catch(() => {});
       }
     });
     window.addEventListener('pagehide', () => {
-      if (user && temporizador && !conflictoSinResolver) { clearTimeout(temporizador); subir().catch(() => {}); }
+      if (user && temporizador) { clearTimeout(temporizador); subir().catch(() => {}); }
     });
   }
 
@@ -199,11 +224,11 @@ const Cloud = (() => {
       return { ok: true, pendienteConfirmacion: true };
     }
     user = data.user;
-    const cambioDeUsuario = comprobarCambioDeUsuario(user);
+    comprobarCambioDeUsuario(user);
     estado = 'conectado';
     avisar();
-    await subir();          // la cuenta es nueva: lo que hay en local manda
-    return { ok: true, cambioDeUsuario };
+    await sincronizarAlEntrar();   // cuenta nueva: deja la fila creada
+    return { ok: true };
   }
 
   async function entrar(email, password) {
@@ -211,11 +236,12 @@ const Cloud = (() => {
     const { data, error } = await client.auth.signInWithPassword({ email, password });
     if (error) return { ok: false, error: traducir(error) };
     user = data.user;
-    /* Si este navegador lo usaba otra persona, sus datos se van antes de nada */
-    const cambioDeUsuario = comprobarCambioDeUsuario(user);
+    comprobarCambioDeUsuario(user);
     estado = 'conectado';
     avisar();
-    return { ok: true, cambioDeUsuario, conflicto: await sincronizarAlEntrar() };
+    /* Lo primero es traerse los datos de la cuenta: en el navegador no hay nada */
+    const traidos = await sincronizarAlEntrar();
+    return { ok: true, datos: traidos };
   }
 
   async function entrarConEnlace(email) {
@@ -278,7 +304,6 @@ const Cloud = (() => {
    */
   async function subir({ forzar = false } = {}) {
     if (!client || !user || subiendo) return { ok: false };
-    conflictoSinResolver = false;   // subir a propósito ya es una decisión
     subiendo = true; avisar();
     try {
       let payload = Store.exportAll();
@@ -311,9 +336,13 @@ const Cloud = (() => {
 
       Store.syncBase.set({ sello: guardada ? guardada.updated_at : null, data: payload.data });
       ultimaSync = Date.now();
+      sinGuardar = false;
+      intentoFallido = 0;
       return { ok: true, fusionado };
     } catch (e) {
       console.warn('No se ha podido subir:', e);
+      /* Se vuelve a intentar solo: el cambio no puede quedarse en el aire */
+      reintentarMasTarde();
       return { ok: false, error: traducir(e) };
     } finally {
       subiendo = false; avisar();
@@ -324,7 +353,6 @@ const Cloud = (() => {
 
   async function bajar() {
     if (!client || !user) return { ok: false };
-    conflictoSinResolver = false;   // bajar a propósito también lo resuelve
     subiendo = true; avisar();
     try {
       const fila = await leerNube();
@@ -343,31 +371,43 @@ const Cloud = (() => {
   }
 
   /**
-   * Al iniciar sesión hay que decidir qué versión vale.
-   * Devuelve un objeto de conflicto si hay datos en los dos sitios,
-   * para que sea el usuario quien elija. Si no, resuelve solo.
+   * Al entrar se traen los datos de la cuenta. Ya no hay nada que decidir:
+   * la copia buena es siempre la de la nube, porque en el navegador no se
+   * guarda nada. Antes había dos almacenes compitiendo y por eso aparecía
+   * aquel diálogo preguntando con cuál quedarse.
+   *
+   * Devuelve { ok } o { ok:false, error } para que la interfaz avise.
    */
   async function sincronizarAlEntrar() {
     try {
       const fila = await leerNube();
-      const hayNube = !!(fila && fila.data && fila.data.data);
-      const hayLocal = Store.hasData();
-
-      if (!hayNube && hayLocal) { await subir(); return null; }
-      if (hayNube && !hayLocal) { await bajar(); return null; }
-      if (!hayNube && !hayLocal) { await subir(); return null; }
-
-      /* Hay datos en ambos lados: que decida el usuario. Hasta entonces no
-         se sube nada solo, para no destruir la copia de la nube. */
-      conflictoSinResolver = true;
-      return {
-        nubeFecha: fila.updated_at ? new Date(fila.updated_at).getTime() : 0,
-        localFecha: Store.lastModified()
-      };
+      if (!fila || !fila.data) {
+        /* Cuenta recién creada: se deja la fila hecha y vacía */
+        Store.wipeUserData();
+        await subir({ forzar: true });
+        return { ok: true, vacio: true };
+      }
+      const res = Store.importAll(fila.data);
+      if (!res.ok) return { ok: false, error: res.error };
+      Store.syncBase.set({ sello: fila.updated_at, data: fila.data.data || fila.data });
+      ultimaSync = Date.now();
+      avisar();
+      return { ok: true };
     } catch (e) {
-      console.warn('Sincronización inicial fallida:', e);
-      return null;
+      console.warn('No se han podido traer los datos:', e);
+      return { ok: false, error: traducir(e) };
     }
+  }
+
+  /** Vuelve a intentar traer los datos de la cuenta (botón "Reintentar"). */
+  async function recargarDatos() {
+    if (!user) return { ok: false };
+    errorAlCargar = null;
+    cargando = true; avisar();
+    const r = await sincronizarAlEntrar();
+    if (!r.ok) errorAlCargar = r.error;
+    cargando = false; avisar();
+    return r;
   }
 
   /* ─────────────── API pública ─────────────── */
@@ -377,9 +417,7 @@ const Cloud = (() => {
     estado: estadoActual,
     configurado,
     registrar, entrar, entrarConEnlace, salir, traducir,
-    conflictoInicial: () => conflictoInicial,
-    olvidarConflictoInicial: () => { conflictoInicial = null; },
-    subir, bajar,
+    subir, bajar, recargarDatos,
     alCambiar: (fn) => { oyentes.push(fn); fn(estadoActual()); }
   };
 })();

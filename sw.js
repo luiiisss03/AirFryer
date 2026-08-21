@@ -7,7 +7,7 @@
    actualización en los navegadores que ya la tengan instalada.
    ============================================================ */
 
-const CACHE_VERSION = 'airchef-v1';
+const CACHE_VERSION = 'airchef-v3';
 
 const ASSETS = [
   './',

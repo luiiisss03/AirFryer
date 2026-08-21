@@ -44,7 +44,7 @@ const Store = (() => {
       theme: 'light', sound: 'on', voice: 'off', notify: 'off', tempOffset: 0,
       /* Perfil: viajan con el resto de datos, así que el avatar y el nombre
          aparecen igual en el móvil y en el ordenador. */
-      name: '', avatar: '🧑‍🍳', avatarColor: 'naranja', welcomed: false
+      name: '', avatar: '🧑‍🍳', avatarColor: 'naranja'
     },
     achievements: [],
     checks: {}
@@ -208,8 +208,35 @@ const Store = (() => {
     console.warn('localStorage no disponible: los datos no se guardarán entre sesiones.');
   }
 
-  /* Copia en memoria por si el navegador bloquea el almacenamiento */
+  /* ─────────────── Dónde vive cada cosa ───────────────
+     La copia buena de los datos de la cuenta está en la nube. Aquí NO se
+     guardan en el navegador: solo se mantienen en memoria mientras la
+     aplicación está abierta, se llenan al entrar y se suben al cambiar.
+
+     En el navegador quedan únicamente los ajustes de este aparato (tema,
+     sonido, voz, avisos y corrección de temperatura), que no son datos de
+     la cuenta y deben respetarse aunque entre otra persona. */
+
+  const CLAVES_DE_CUENTA = new Set([
+    'favorites', 'history', 'week', 'shopping', 'pantry', 'notes', 'achievements', 'checks'
+  ]);
+
+  /* Dentro de las preferencias, esto pertenece a la persona, no al aparato */
+  const PREFS_DE_CUENTA = ['name', 'avatar', 'avatarColor'];
+
+  /* Almacén en memoria: aquí viven los datos de la cuenta */
   const memory = {};
+
+  /* Versiones anteriores guardaban los datos de la cuenta en el navegador.
+     Ya no se usan y no deben quedarse ahí ocupando sitio: la copia buena
+     está en la nube. Se limpian una sola vez. */
+  try {
+    if (typeof localStorage !== 'undefined') {
+      CLAVES_DE_CUENTA.forEach(n => localStorage.removeItem(PREFIX + n));
+      localStorage.removeItem(PREFIX + 'syncBase');
+      localStorage.removeItem(PREFIX + 'updatedAt');
+    }
+  } catch (e) { /* si no se puede, tampoco pasa nada */ }
 
   /* Caché de lectura. Pintar 180 tarjetas consultaba localStorage cientos de
      veces y cada lectura implica un JSON.parse. Se invalida al escribir. */
@@ -217,8 +244,11 @@ const Store = (() => {
 
   function read(key, fallback) {
     if (cache.has(key)) return cache.get(key);
+    const nombre = nombreDeClave(key);
     let value;
-    if (!available) {
+
+    /* Los datos de la cuenta nunca se leen del navegador */
+    if (CLAVES_DE_CUENTA.has(nombre) || !available) {
       value = key in memory ? memory[key] : clone(fallback);
     } else {
       try {
@@ -228,6 +258,17 @@ const Store = (() => {
       } catch (e) {
         console.warn('Dato corrupto en', key, '— se restaura el valor por defecto.');
         value = clone(fallback);
+      }
+      /* Las preferencias son mitad y mitad: del navegador solo valen los
+         ajustes del aparato. El perfil (nombre y avatar) es de la cuenta y
+         viene de la nube, así que se descarta lo que hubieran dejado ahí
+         las versiones anteriores. */
+      if (nombre === 'prefs' && esObjeto(value)) {
+        const delAparato = {};
+        Object.entries(value).forEach(([k, v]) => {
+          if (!PREFS_DE_CUENTA.includes(k)) delAparato[k] = v;
+        });
+        value = Object.assign({}, delAparato, memory[key] || {});
       }
     }
 
@@ -249,20 +290,33 @@ const Store = (() => {
 
   function write(key, value) {
     cache.set(key, value);
-    if (available) {
-      try {
-        localStorage.setItem(key, JSON.stringify(value));
-        localStorage.setItem(PREFIX + 'updatedAt', String(Date.now()));
-      } catch (e) {
-        console.warn('No se ha podido guardar en', key, e);
-        /* Antes esto solo se veía en la consola: el usuario creía haber
-           guardado y no era cierto. Ahora la interfaz puede avisar. */
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('airfryer:storagefull', { detail: { key } }));
-        }
-      }
-    } else {
+    const nombre = nombreDeClave(key);
+    marcaDeTiempo = Date.now();
+
+    if (CLAVES_DE_CUENTA.has(nombre) || !available) {
+      /* Dato de la cuenta: se queda en memoria y la nube se encarga del resto */
       memory[key] = value;
+    } else if (nombre === 'prefs' && esObjeto(value)) {
+      /* Se separa: el perfil va con la cuenta, los ajustes con el aparato */
+      const delAparato = {}, deLaCuenta = {};
+      Object.entries(value).forEach(([k, v]) => {
+        (PREFS_DE_CUENTA.includes(k) ? deLaCuenta : delAparato)[k] = v;
+      });
+      memory[key] = deLaCuenta;
+      /* Se fusiona con lo que ya hubiera: cuando llegan datos de la nube no
+         vienen los ajustes de este aparato y no deben perderse. */
+      let previo = {};
+      if (available) {
+        try { previo = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch (e) {}
+      }
+      const ajustes = Object.assign({}, previo, delAparato);
+      guardarEnNavegador(key, ajustes);
+      /* En la caché van las dos mitades juntas: si solo se guardara lo que
+         acaba de llegar, una bajada de la nube dejaría la aplicación sin el
+         tema ni la corrección de temperatura hasta recargar. */
+      cache.set(key, Object.assign({}, ajustes, deLaCuenta));
+    } else {
+      guardarEnNavegador(key, value);
     }
     /* Aviso para que la capa de nube sepa que hay algo que subir */
     if (!silent && typeof window !== 'undefined') {
@@ -270,6 +324,22 @@ const Store = (() => {
     }
     return value;
   }
+
+  /* Escritura en el navegador, solo para lo que es de este aparato */
+  function guardarEnNavegador(key, value) {
+    if (!available) { memory[key] = value; return; }
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      console.warn('No se ha podido guardar en', key, e);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('airfryer:storagefull', { detail: { key } }));
+      }
+    }
+  }
+
+  /* Cuándo se tocó algo por última vez (antes vivía en localStorage) */
+  let marcaDeTiempo = 0;
 
   /* Durante una importación no interesa disparar un aviso por cada clave */
   let silent = false;
@@ -567,6 +637,14 @@ const Store = (() => {
     }
   };
 
+  /* Solo la parte de las preferencias que pertenece a la persona */
+  function soloPerfil() {
+    const todas = prefs.all();
+    const out = {};
+    PREFS_DE_CUENTA.forEach(k => { if (k in todas) out[k] = todas[k]; });
+    return out;
+  }
+
   /* ─────────────── Copia de seguridad ─────────────── */
   function exportAll() {
     return {
@@ -580,7 +658,10 @@ const Store = (() => {
         shopping: shopping.all(),
         pantry: pantry.all(),
         notes: notes.all(),
-        prefs: prefs.all(),
+        /* Solo el perfil: los ajustes de este aparato (tema, sonido, voz,
+           avisos y temperatura) no viajan, o un móvil le cambiaría el tema
+           al ordenador. */
+        prefs: soloPerfil(),
         achievements: achievements.all(),
         checks: checks.all()
       }
@@ -736,23 +817,14 @@ const Store = (() => {
   }
 
   /* Copia de la última versión sincronizada, para poder comparar */
-  const BASE = PREFIX + 'syncBase';
+  /* La última versión bajada de la nube, para poder fusionar si otro
+     dispositivo escribe mientras tanto. Vive en memoria: no tiene sentido
+     guardarla en el navegador si los datos tampoco se guardan. */
+  let base = null;
   const syncBase = {
-    get() {
-      try {
-        const raw = available ? localStorage.getItem(BASE) : memory[BASE];
-        return raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : null;
-      } catch (e) { return null; }
-    },
-    set(datos) {
-      try {
-        const txt = JSON.stringify(datos);
-        if (available) localStorage.setItem(BASE, txt); else memory[BASE] = txt;
-      } catch (e) { /* si no cabe, se seguirá reemplazando como antes */ }
-    },
-    clear() {
-      try { if (available) localStorage.removeItem(BASE); delete memory[BASE]; } catch (e) {}
-    }
+    get: () => base,
+    set: (datos) => { base = datos ? clone(datos) : null; },
+    clear: () => { base = null; }
   };
 
   function wipe() {
@@ -766,7 +838,7 @@ const Store = (() => {
 
   /* Ajustes que son del aparato, no de la persona: sobreviven a un cambio
      de cuenta. El nombre y el avatar sí son personales y se van. */
-  const PREFS_DEL_DISPOSITIVO = ['theme', 'sound', 'voice', 'notify', 'tempOffset', 'welcomed'];
+  const PREFS_DEL_DISPOSITIVO = ['theme', 'sound', 'voice', 'notify', 'tempOffset'];
 
   /**
    * Borra lo que pertenece al usuario (favoritos, historial, semana, compra,
@@ -774,17 +846,10 @@ const Store = (() => {
    * No dispara el aviso de cambio, así que por sí solo no sube nada a la nube.
    */
   function wipeUserData() {
-    const antes = prefs.all();
-    const conservadas = {};
-    PREFS_DEL_DISPOSITIVO.forEach(k => { if (k in antes) conservadas[k] = antes[k]; });
-    wipe();
-    const nuevas = Object.assign({}, DEFAULTS.prefs, conservadas);
-    cache.set(KEYS.prefs, nuevas);
-    if (available) {
-      try { localStorage.setItem(KEYS.prefs, JSON.stringify(nuevas)); } catch (e) {}
-    } else {
-      memory[KEYS.prefs] = nuevas;
-    }
+    /* Los datos de la cuenta solo viven en memoria: basta con vaciarla.
+       Los ajustes del aparato, que están en el navegador, no se tocan. */
+    Object.values(KEYS).forEach(k => { delete memory[k]; cache.delete(k); });
+    marcaDeTiempo = 0;
   }
 
   /* Quién fue el último usuario con sesión en este navegador. Sirve para no
@@ -802,8 +867,7 @@ const Store = (() => {
 
   /* Marca de tiempo de la última modificación local (para comparar con la nube) */
   function lastModified() {
-    if (!available) return 0;
-    return Number(localStorage.getItem(PREFIX + 'updatedAt') || 0);
+    return marcaDeTiempo;
   }
 
   /* ¿Hay algo guardado que merezca la pena sincronizar? */

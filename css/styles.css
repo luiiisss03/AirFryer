@@ -125,6 +125,20 @@ img { max-width: 100%; }
   to { opacity: 1; transform: none; }
 }
 
+/* La vista entra por el lado del que "viene": avanzando desde la derecha y
+   retrocediendo desde la izquierda. Sin esto todas las pantallas entraban
+   igual y no se percibía si se iba hacia delante o hacia atrás. */
+.view.is-active[data-dir="avanza"] { animation: vistaDesdeLaDerecha .34s var(--ease); }
+.view.is-active[data-dir="vuelve"] { animation: vistaDesdeLaIzquierda .34s var(--ease); }
+@keyframes vistaDesdeLaDerecha {
+  from { opacity: 0; transform: translateX(22px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes vistaDesdeLaIzquierda {
+  from { opacity: 0; transform: translateX(-22px); }
+  to   { opacity: 1; transform: none; }
+}
+
 .view__head { margin: 8px 0 18px; }
 .view__title { font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 800; }
 .view__sub { color: var(--muted); font-size: .95rem; margin-top: 4px; }
@@ -142,7 +156,7 @@ img { max-width: 100%; }
   padding: 6px 10px; border-radius: 999px; transition: background .2s;
   white-space: nowrap;
 }
-.link-btn:hover { background: var(--orange-soft); }
+@media (hover: hover) { .link-btn:hover { background: var(--orange-soft); } }
 
 /* ══════════════ 3. SPLASH Y NAVEGACIÓN ══════════════ */
 .splash {
@@ -191,7 +205,7 @@ img { max-width: 100%; }
   padding: 9px 15px; border-radius: 999px; font-weight: 600; font-size: .93rem;
   color: var(--text-soft); transition: all .2s var(--ease);
 }
-.topnav__link:hover { background: var(--surface-2); color: var(--text); }
+@media (hover: hover) { .topnav__link:hover { background: var(--surface-2); color: var(--text); } }
 .topnav__link.is-active { background: var(--orange); color: #fff; box-shadow: 0 4px 14px rgba(255,107,44,.35); }
 
 .topbar__actions { display: flex; gap: 8px; }
@@ -201,7 +215,7 @@ img { max-width: 100%; }
   background: var(--surface); border: 1px solid var(--border);
   font-size: 1.05rem; transition: transform .2s var(--ease), background .2s, border-color .2s;
 }
-.icon-btn:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+@media (hover: hover) { .icon-btn:hover { transform: translateY(-2px); border-color: var(--border-strong); } }
 .icon-btn:active { transform: scale(.94); }
 .icon-btn--sm { width: 34px; height: 34px; border-radius: 11px; font-size: .9rem; }
 .icon-btn--float {
@@ -219,6 +233,20 @@ img { max-width: 100%; }
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(16px) saturate(180%);
   border-top: 1px solid var(--border);
+}
+
+/* Una marca que se desliza de una pestaña a otra. Antes el cambio era un
+   salto seco de color: ver el recorrido ayuda a entender a dónde se ha ido.
+   `--tab` es el índice de la pestaña activa y lo pone app.js. */
+.tabbar::before {
+  content: '';
+  position: absolute; top: 6px; left: 0;
+  width: calc(100% / var(--tabs, 6));
+  height: 3px; pointer-events: none;
+  transform: translateX(calc(var(--tab, 0) * 100%));
+  transition: transform .34s var(--ease);
+  /* La barrita ocupa solo el centro del hueco de su pestaña */
+  background: linear-gradient(var(--orange), var(--orange)) no-repeat center / 26px 100%;
 }
 .tabbar__btn {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -247,12 +275,12 @@ img { max-width: 100%; }
   background: linear-gradient(135deg, #FF8A45, var(--orange));
   color: #fff; box-shadow: 0 8px 20px rgba(255,107,44,.32);
 }
-.btn--primary:hover { box-shadow: 0 12px 26px rgba(255,107,44,.42); transform: translateY(-2px); }
+@media (hover: hover) { .btn--primary:hover { box-shadow: 0 12px 26px rgba(255,107,44,.42); transform: translateY(-2px); } }
 .btn--ghost { background: var(--surface); border-color: var(--border); color: var(--text); }
-.btn--ghost:hover { border-color: var(--orange); color: var(--orange); transform: translateY(-2px); }
+@media (hover: hover) { .btn--ghost:hover { border-color: var(--orange); color: var(--orange); transform: translateY(-2px); } }
 .btn--danger { background: var(--red); color: #fff; }
 .btn--danger-ghost { background: transparent; border-color: var(--border); color: var(--red); }
-.btn--danger-ghost:hover { background: color-mix(in srgb, var(--red) 12%, transparent); border-color: var(--red); }
+@media (hover: hover) { .btn--danger-ghost:hover { background: color-mix(in srgb, var(--red) 12%, transparent); border-color: var(--red); } }
 .btn--block { width: 100%; }
 .btn--big { padding: 16px 22px; font-size: 1rem; }
 .btn--sm { padding: 8px 14px; font-size: .82rem; }
@@ -281,7 +309,7 @@ img { max-width: 100%; }
   width: 34px; height: 34px; border-radius: 50%; background: var(--surface-2);
   color: var(--muted); font-size: .8rem; transition: background .2s;
 }
-.searchbar__clear:hover { background: var(--border); }
+@media (hover: hover) { .searchbar__clear:hover { background: var(--border); } }
 .searchbar--hero { max-width: 620px; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -290,7 +318,7 @@ img { max-width: 100%; }
   background: var(--surface); border: 1px solid var(--border); color: var(--text-soft);
   transition: all .2s var(--ease);
 }
-.chip:hover { border-color: var(--orange); color: var(--orange); transform: translateY(-1px); }
+@media (hover: hover) { .chip:hover { border-color: var(--orange); color: var(--orange); transform: translateY(-1px); } }
 .chip.is-on { background: var(--orange); border-color: var(--orange); color: #fff; box-shadow: 0 5px 14px rgba(255,107,44,.3); }
 
 .chips--scroll {
@@ -310,7 +338,7 @@ img { max-width: 100%; }
   background: var(--surface); border: 1px solid var(--border); color: var(--text);
   font-weight: 600; font-size: .88rem; cursor: pointer; transition: border-color .2s;
 }
-.select-wrap select:hover { border-color: var(--orange); }
+@media (hover: hover) { .select-wrap select:hover { border-color: var(--orange); } }
 
 .active-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .tagx {
@@ -321,7 +349,7 @@ img { max-width: 100%; }
 }
 [data-theme="dark"] .tagx { color: #FFB182; }
 .tagx i { font-style: normal; opacity: .65; }
-.tagx:hover { background: color-mix(in srgb, var(--orange) 22%, transparent); }
+@media (hover: hover) { .tagx:hover { background: color-mix(in srgb, var(--orange) 22%, transparent); } }
 .tagx--clear { background: transparent; border: 1px dashed var(--border-strong); color: var(--muted); }
 
 .pill {
@@ -348,7 +376,7 @@ img { max-width: 100%; }
   font-size: 1rem; font-weight: 700; color: var(--orange);
   box-shadow: var(--shadow-sm); transition: transform .15s var(--ease);
 }
-.stepper button:hover { transform: scale(1.1); }
+@media (hover: hover) { .stepper button:hover { transform: scale(1.1); } }
 .stepper button:active { transform: scale(.9); }
 .stepper span, .stepper input {
   min-width: 58px; text-align: center; font-weight: 700; font-size: .92rem;
@@ -399,10 +427,10 @@ img { max-width: 100%; }
   background: linear-gradient(160deg, var(--c1, #FFD3B0), var(--c2, #FF8A45));
   opacity: 0; transition: opacity .25s;
 }
-.cat:hover { transform: translateY(-4px); box-shadow: var(--shadow); border-color: transparent; }
-.cat:hover::before { opacity: .14; }
+@media (hover: hover) { .cat:hover { transform: translateY(-4px); box-shadow: var(--shadow); border-color: transparent; } }
+@media (hover: hover) { .cat:hover::before { opacity: .14; } }
 .cat__emoji { font-size: 1.85rem; position: relative; transition: transform .25s var(--ease); }
-.cat:hover .cat__emoji { transform: scale(1.16) rotate(-6deg); }
+@media (hover: hover) { .cat:hover .cat__emoji { transform: scale(1.16) rotate(-6deg); } }
 .cat__label { font-size: .82rem; font-weight: 650; position: relative; }
 .cat__count { font-size: .7rem; color: var(--muted); position: relative; }
 
@@ -413,7 +441,7 @@ img { max-width: 100%; }
   color: #fff; box-shadow: 0 14px 34px rgba(255,92,31,.35);
   transition: transform .25s var(--ease), box-shadow .25s;
 }
-.dice-card:hover { transform: translateY(-3px); box-shadow: 0 20px 44px rgba(255,92,31,.45); }
+@media (hover: hover) { .dice-card:hover { transform: translateY(-3px); box-shadow: 0 20px 44px rgba(255,92,31,.45); } }
 .dice-card__emoji { font-size: 2.4rem; animation: roll 5s ease-in-out infinite; }
 .dice-card__body { display: flex; flex-direction: column; }
 .dice-card__body b { font-size: 1.02rem; letter-spacing: .02em; }
@@ -446,7 +474,7 @@ img { max-width: 100%; }
   display: flex; flex-direction: column;
   transition: transform .25s var(--ease), box-shadow .25s var(--ease), border-color .2s;
 }
-.card:hover { transform: translateY(-6px); box-shadow: var(--shadow-lg); border-color: transparent; }
+@media (hover: hover) { .card:hover { transform: translateY(-6px); box-shadow: var(--shadow-lg); border-color: transparent; } }
 .card:active { transform: translateY(-2px) scale(.99); }
 
 .card__art {
@@ -463,7 +491,7 @@ img { max-width: 100%; }
   filter: drop-shadow(0 6px 12px rgba(0,0,0,.22));
   transition: transform .3s var(--ease);
 }
-.card:hover .card__emoji { transform: scale(1.14) rotate(-5deg); }
+@media (hover: hover) { .card:hover .card__emoji { transform: scale(1.14) rotate(-5deg); } }
 .card__cat {
   position: absolute; left: 12px; bottom: 12px; z-index: 2;
   background: rgba(255,255,255,.9); color: #241B15;
@@ -476,7 +504,7 @@ img { max-width: 100%; }
   font-size: 1.02rem; box-shadow: var(--shadow-sm);
   transition: transform .2s var(--ease), background .2s;
 }
-.card__fav:hover { transform: scale(1.14); background: #fff; }
+@media (hover: hover) { .card__fav:hover { transform: scale(1.14); background: #fff; } }
 
 .card__body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
 .card__title { font-size: 1.03rem; font-weight: 700; }
@@ -621,7 +649,7 @@ img { max-width: 100%; }
   padding: 11px 12px; border-radius: var(--r-sm); transition: background .2s;
   flex: 1;
 }
-.ing:hover { background: var(--surface-2); }
+@media (hover: hover) { .ing:hover { background: var(--surface-2); } }
 .ing input { position: absolute; opacity: 0; width: 0; height: 0; }
 .ing__box {
   flex: 0 0 22px; width: 22px; height: 22px; border-radius: 7px; margin-top: 1px;
@@ -739,7 +767,7 @@ img { max-width: 100%; }
   background: var(--surface); border: 1px solid var(--border); color: var(--text-soft);
   transition: all .2s var(--ease);
 }
-.timer__quick button:hover { border-color: var(--orange); color: var(--orange); transform: translateY(-2px); }
+@media (hover: hover) { .timer__quick button:hover { border-color: var(--orange); color: var(--orange); transform: translateY(-2px); } }
 
 .cook__foot {
   display: flex; gap: 12px; padding: 16px 22px calc(16px + env(safe-area-inset-bottom));
@@ -783,7 +811,7 @@ img { max-width: 100%; }
   border-radius: var(--r-lg); padding: 16px; display: flex; flex-direction: column; gap: 12px;
   transition: border-color .2s, box-shadow .2s;
 }
-.day:hover { box-shadow: var(--shadow); }
+@media (hover: hover) { .day:hover { box-shadow: var(--shadow); } }
 .day.has-recipe { border-color: var(--border-strong); }
 .day__head { display: flex; align-items: center; justify-content: space-between; }
 .day__head h3 { font-size: .95rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
@@ -793,7 +821,7 @@ img { max-width: 100%; }
   padding: 12px; border-radius: var(--r); background: var(--surface-2);
   transition: transform .2s var(--ease);
 }
-.day__recipe:hover { transform: translateX(3px); }
+@media (hover: hover) { .day__recipe:hover { transform: translateX(3px); } }
 .day__emoji {
   width: 50px; height: 50px; flex: 0 0 50px; border-radius: 15px; display: grid; place-items: center;
   font-size: 1.6rem; background: linear-gradient(150deg, var(--c1, #FFD3B0), var(--c2, #FF8A45));
@@ -810,7 +838,7 @@ img { max-width: 100%; }
   color: var(--muted); font-weight: 600; font-size: .9rem; transition: all .2s var(--ease);
 }
 .day__add span { font-size: 1.2rem; }
-.day__add:hover { border-color: var(--orange); color: var(--orange); background: var(--orange-soft); }
+@media (hover: hover) { .day__add:hover { border-color: var(--orange); color: var(--orange); background: var(--orange-soft); } }
 
 .add-item { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
 .add-item input {
@@ -839,7 +867,7 @@ img { max-width: 100%; }
   border-radius: var(--r); padding: 4px 12px 4px 4px;
   transition: opacity .25s, border-color .2s;
 }
-.shop-item:hover { border-color: var(--border-strong); }
+@media (hover: hover) { .shop-item:hover { border-color: var(--border-strong); } }
 .shop-item.is-done { opacity: .55; }
 .shop-item .ing__text { display: flex; flex-direction: column; gap: 1px; }
 .shop-item__qty { font-size: .8rem; color: var(--orange-dark); font-weight: 650; }
@@ -857,14 +885,14 @@ img { max-width: 100%; }
   transition: transform .2s var(--ease), box-shadow .2s, border-color .2s;
   text-align: left; width: 100%; position: relative;
 }
-.stat:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: var(--orange); }
+@media (hover: hover) { .stat:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: var(--orange); } }
 /* La pista de "a dónde lleva" solo aparece al pasar por encima, para no
    recargar la cuadrícula de datos. En táctil se muestra siempre. */
 .stat__ir {
   font-style: normal; font-size: .72rem; font-weight: 700; color: var(--orange);
   margin-top: 6px; opacity: 0; transition: opacity .2s;
 }
-.stat:hover .stat__ir, .stat:focus-visible .stat__ir { opacity: 1; }
+@media (hover: hover) { .stat:hover .stat__ir, .stat:focus-visible .stat__ir { opacity: 1; } }
 @media (hover: none) { .stat__ir { opacity: .75; } }
 
 /* Resalte breve al saltar a una sección desde los datos del perfil */
@@ -890,7 +918,7 @@ img { max-width: 100%; }
   background: linear-gradient(150deg, var(--orange-soft), var(--surface));
   box-shadow: var(--shadow-sm);
 }
-.achv.is-on:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
+@media (hover: hover) { .achv.is-on:hover { transform: translateY(-4px); box-shadow: var(--shadow); } }
 .achv__emoji { font-size: 2rem; }
 .achv b { font-size: .88rem; }
 .achv small { font-size: .74rem; color: var(--muted); }
@@ -901,7 +929,7 @@ img { max-width: 100%; }
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
   padding: 10px 14px 10px 10px; transition: transform .2s var(--ease), border-color .2s;
 }
-.hist:hover { transform: translateX(4px); border-color: var(--orange); }
+@media (hover: hover) { .hist:hover { transform: translateX(4px); border-color: var(--orange); } }
 .hist__emoji {
   width: 46px; height: 46px; flex: 0 0 46px; border-radius: 14px;
   display: grid; place-items: center; font-size: 1.45rem;
@@ -942,7 +970,7 @@ img { max-width: 100%; }
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
   padding: 10px; transition: all .2s var(--ease);
 }
-.pickitem:hover { border-color: var(--orange); transform: translateX(3px); }
+@media (hover: hover) { .pickitem:hover { border-color: var(--orange); transform: translateX(3px); } }
 .pickitem__emoji {
   width: 46px; height: 46px; flex: 0 0 46px; border-radius: 14px;
   display: grid; place-items: center; font-size: 1.4rem;
@@ -1077,7 +1105,7 @@ img { max-width: 100%; }
   background: linear-gradient(135deg, #4FB477, #2E8B57);
   box-shadow: 0 14px 34px rgba(46, 139, 87, .3);
 }
-.dice-card--alt:hover { box-shadow: 0 20px 44px rgba(46, 139, 87, .4); }
+@media (hover: hover) { .dice-card--alt:hover { box-shadow: 0 20px 44px rgba(46, 139, 87, .4); } }
 .dice-card--alt .dice-card__emoji { animation: none; }
 
 /* Valoración propia sobre la tarjeta */
@@ -1110,7 +1138,7 @@ img { max-width: 100%; }
 .rating button {
   font-size: 1.5rem; line-height: 1; padding: 2px; transition: transform .18s var(--ease);
 }
-.rating button:hover { transform: scale(1.2); }
+@media (hover: hover) { .rating button:hover { transform: scale(1.2); } }
 .rating__clear {
   font-size: .78rem !important; color: var(--muted); margin-left: 10px;
   border: 1px solid var(--border); border-radius: 999px;
@@ -1146,7 +1174,7 @@ img { max-width: 100%; }
   background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm);
   padding: 10px 12px; transition: all .2s var(--ease);
 }
-.daypick__slot:hover { border-color: var(--orange); transform: translateY(-2px); }
+@media (hover: hover) { .daypick__slot:hover { border-color: var(--orange); transform: translateY(-2px); } }
 .daypick__slot span { font-weight: 650; font-size: .88rem; }
 .daypick__slot small { color: var(--muted); font-size: .74rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -1168,7 +1196,7 @@ img { max-width: 100%; }
   padding: 7px 14px; font-size: .84rem; font-weight: 600; transition: all .2s var(--ease);
 }
 .batch__item small { color: var(--muted); font-weight: 500; margin-left: 4px; }
-.batch__item:hover { border-color: var(--orange); transform: translateY(-2px); }
+@media (hover: hover) { .batch__item:hover { border-color: var(--orange); transform: translateY(-2px); } }
 .batch__total { margin-top: 14px; font-size: .82rem; color: var(--muted); text-align: right; }
 
 /* Despensa: catálogo marcable, agrupado por pasillo */
@@ -1363,7 +1391,7 @@ img { max-width: 100%; }
   max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   transition: background .2s;
 }
-.photo__credit:hover { background: rgba(0,0,0,.78); }
+@media (hover: hover) { .photo__credit:hover { background: rgba(0,0,0,.78); } }
 
 /* Lista de créditos */
 .credits { display: flex; flex-direction: column; gap: 10px; }
@@ -1374,7 +1402,27 @@ img { max-width: 100%; }
 .credits b { font-size: .88rem; }
 .credits small { font-size: .76rem; color: var(--muted); }
 .credits a { font-size: .74rem; color: var(--orange); text-decoration: none; }
-.credits a:hover { text-decoration: underline; }
+@media (hover: hover) { .credits a:hover { text-decoration: underline; } }
+
+/* Barra de estado de la conexión. Va abajo, por encima de la barra de
+   pestañas del móvil: arriba tapaba la cabecera. */
+.netbar {
+  position: fixed; z-index: 128;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom));
+  width: min(520px, calc(100% - 24px));
+  padding: 9px 14px; text-align: center; border-radius: 999px;
+  font-size: .8rem; font-weight: 650;
+  background: var(--orange-soft); color: var(--orange-dark);
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+}
+@media (min-width: 900px) { .netbar { bottom: 18px; } }
+.netbar.is-error { background: #FFE2D6; color: #A3350B; }
+[data-theme="dark"] .netbar { color: #FFB182; }
+[data-theme="dark"] .netbar.is-error { background: #4A1F10; color: #FFC4A3; }
+
+/* Espera de datos: la forma de lo que va a llegar */
+.empty--cargando .sk { max-width: 260px; margin: 6px auto 0; }
 
 /* ══════════════ 12·0. AVISO DE VERSIÓN NUEVA ══════════════
    Aparece abajo, por encima de la barra de pestañas del móvil. */
@@ -1493,7 +1541,7 @@ img { max-width: 100%; }
   background: var(--surface); border: 1px solid var(--border);
   transition: all .2s var(--ease);
 }
-.avpick:hover { border-color: var(--orange); transform: translateY(-2px); }
+@media (hover: hover) { .avpick:hover { border-color: var(--orange); transform: translateY(-2px); } }
 .avpick.is-on { border-color: var(--orange); border-width: 2px; background: var(--orange-soft); }
 
 .avcolor {
@@ -1501,7 +1549,7 @@ img { max-width: 100%; }
   border: 3px solid transparent; box-shadow: inset 0 0 0 2px var(--surface);
   transition: transform .2s var(--ease), border-color .2s;
 }
-.avcolor:hover { transform: scale(1.08); }
+@media (hover: hover) { .avcolor:hover { transform: scale(1.08); } }
 .avcolor.is-on { border-color: var(--text); }
 
 /* Ojo: ".field" ya existe más abajo para los campos del login (es un label).
@@ -1594,6 +1642,60 @@ img { max-width: 100%; }
     transition-duration: .01ms !important;
   }
 }
+
+/* ══════════════ RESPUESTA AL TOQUE ══════════════
+   El ratón tiene el `:hover` para saber que algo es pulsable; el dedo no
+   tiene nada equivalente. Sin esto, en el móvil la mitad de los elementos
+   no daban ninguna señal al tocarlos y la aplicación parecía lenta aunque
+   respondiera al instante. */
+
+/* El recuadro gris del navegador choca con las esquinas redondeadas:
+   se quita y se sustituye por el hundido de abajo. */
+html {
+  -webkit-tap-highlight-color: transparent;
+  /* Al saltar a una sección, su título no debe quedar bajo la barra fija */
+  scroll-padding-top: calc(var(--header-h) + 16px);
+}
+
+.chip, .cat, .tagx, .link-btn, .topnav__link, .tabbar__btn,
+.dice-card, .card__fav, .stat, .achv, .hist, .pickitem, .day__recipe,
+.day__add, .daypick__slot, .batch__item, .avpick, .avcolor,
+.shop-item, .timer__quick button, .rating button, .ing {
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .18s var(--ease), background-color .18s, border-color .18s;
+}
+
+.chip:active, .cat:active, .tagx:active, .link-btn:active, .topnav__link:active,
+.dice-card:active, .stat:active, .achv:active, .hist:active, .pickitem:active,
+.day__recipe:active, .day__add:active, .daypick__slot:active, .batch__item:active,
+.avpick:active, .timer__quick button:active {
+  transform: scale(.96);
+}
+.card__fav:active, .avcolor:active, .rating button:active { transform: scale(.88); }
+.tabbar__btn:active span { transform: scale(.86); }
+/* Las filas largas se hunden, no se encogen: encogerlas se ve raro */
+.shop-item:active, .ing:active { background: var(--surface-2); }
+
+/* El scroll de un panel no debe arrastrar la página que hay detrás */
+.sheet__body, .rail, .cook__body, .chips--scroll, .pickitem-list,
+.shopping, .welcome, .rescue {
+  overscroll-behavior: contain;
+}
+
+/* ══════════════ ENTRADA DEL CONTENIDO ══════════════
+   Las tarjetas entraban todas a la vez. Escalonarlas unas décimas da
+   sensación de que la lista "se monta" en vez de aparecer de golpe.
+   `backwards` mantiene el estado inicial durante la espera. */
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+.grid > .card, .cats > .cat {
+  animation: cardIn .42s var(--ease) backwards;
+  animation-delay: calc(var(--i, 0) * 35ms);
+}
+/* En los carruseles solo se anima lo que se ve al principio */
+.rail > .card { animation: cardIn .42s var(--ease) backwards; animation-delay: calc(var(--i, 0) * 45ms); }
 
 /* Impresión: útil para llevar la lista de la compra en papel */
 @media print {

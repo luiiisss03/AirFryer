@@ -40,9 +40,9 @@
         <button class="btn btn--ghost btn--wide" id="rescueReload">🔄 Volver a intentarlo</button>
         <button class="btn btn--primary btn--wide" id="rescueRepair">🧹 Reparar mis datos y entrar</button>
       </div>
-      <p class="rescue__note">Reparar borra los datos guardados en este dispositivo
-        (favoritos, semana, compra y progreso). Las recetas no se tocan. Si tienes
-        cuenta, podrás recuperarlos al iniciar sesión.</p>
+      <p class="rescue__note">Reparar solo borra los ajustes de este dispositivo.
+        Tus recetas, tu semana y tu progreso están en tu cuenta y no se tocan:
+        vuelven a aparecer al entrar.</p>
       <details class="rescue__detail">
         <summary>Detalle técnico</summary>
         <pre id="rescueError"></pre>
@@ -456,11 +456,10 @@
       <div class="welcome__actions">
         <button class="btn btn--primary btn--wide" id="welcomeSignup">Crear mi cuenta</button>
         <button class="btn btn--ghost btn--wide" id="welcomeLogin">Ya tengo cuenta</button>
-        <button class="link-btn" id="welcomeSkip">Seguir sin cuenta</button>
       </div>
 
-      <p class="welcome__note">Con cuenta tendrás tus recetas y tu progreso también en el móvil.
-        Sin cuenta funciona igual, pero solo en este dispositivo.</p>
+      <p class="welcome__note">Tus recetas, tu semana y tu progreso se guardan en tu cuenta,
+        así que los tienes igual en el móvil y en el ordenador.</p>
     </div>
   </div>
 
@@ -568,6 +567,10 @@
       <button class="btn btn--ghost btn--wide" data-choice-cancel id="choiceCancel">Cancelar</button>
     </div>
   </div>
+
+  <!-- Estado de la conexión: los datos viven en la nube, así que si no hay
+       red conviene decirlo en vez de aparentar que todo se guarda. -->
+  <div class="netbar" id="avisoConexion" role="status" hidden></div>
 
   <!-- ══════════ TOASTS ══════════ -->
   <div class="toasts" id="toasts" aria-live="polite"></div>
